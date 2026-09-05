@@ -1708,10 +1708,405 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
 .hh-status-select{padding:5px;border:1px solid #bbb;border-radius:6px}
 .hh-empty-orders{padding:30px;text-align:center;color:#666}
 @media(max-width:600px){.hh-brand-main{font-size:11px}.hh-brand-owner{font-size:8px}.hh-ai-center-title{top:-16px}.hh-order-sheet{font-size:11px}}
+
+  <!-- ================= UPGRADED BOOT ANIMATION ================= -->
+    /* FULL SCREEN BOOT SCREEN */
+    #bootScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+
+        z-index: 9999999;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        color: white;
+
+        /* RED + BLACK MIXED BACKGROUND */
+        background:
+            radial-gradient(
+                circle at 50% 45%,
+                rgba(180, 0, 0, 0.45),
+                transparent 35%
+            ),
+            radial-gradient(
+                circle at 10% 90%,
+                rgba(255, 0, 0, 0.18),
+                transparent 35%
+            ),
+            linear-gradient(
+                135deg,
+                #000000 0%,
+                #160000 30%,
+                #050000 55%,
+                #320000 75%,
+                #000000 100%
+            );
+
+        background-size: 200% 200%;
+
+        animation: bootBackgroundMove 8s ease infinite;
+
+        opacity: 1;
+        visibility: visible;
+
+        transition:
+            opacity 0.8s ease,
+            visibility 0.8s ease;
+    }
+
+    /* BACKGROUND MOVEMENT */
+    @keyframes bootBackgroundMove {
+
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
+
+    }
+
+
+    /* HIDE BOOT SCREEN */
+    #bootScreen.bootHide {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+
+    /* MAIN CONTENT */
+    .bootContent {
+        width: 90%;
+        max-width: 450px;
+
+        text-align: center;
+
+        font-family: Arial, sans-serif;
+    }
+
+
+    /* HH LOGO */
+    .bootLogo {
+
+        width: 100px;
+        height: 100px;
+
+        margin: 0 auto 25px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border: 2px solid #ff1a1a;
+
+        border-radius: 50%;
+
+        color: #ffffff;
+
+        font-size: 32px;
+        font-weight: bold;
+
+        letter-spacing: 2px;
+
+        background: rgba(0,0,0,0.45);
+
+        box-shadow:
+            0 0 10px #ff0000,
+            0 0 25px #ff0000,
+            inset 0 0 20px rgba(255,0,0,0.25);
+
+        animation: bootLogoAnimation 1.6s infinite;
+    }
+
+
+    /* LOGO ANIMATION */
+    @keyframes bootLogoAnimation {
+
+        0% {
+
+            transform: scale(1);
+
+            box-shadow:
+                0 0 10px #ff0000,
+                0 0 25px #ff0000;
+
+        }
+
+        50% {
+
+            transform: scale(1.08);
+
+            box-shadow:
+                0 0 20px #ff0000,
+                0 0 50px #ff0000;
+
+        }
+
+        100% {
+
+            transform: scale(1);
+
+            box-shadow:
+                0 0 10px #ff0000,
+                0 0 25px #ff0000;
+
+        }
+
+    }
+
+
+    /* BUSINESS NAME */
+    .bootTitle {
+
+        font-size: 23px;
+
+        font-weight: bold;
+
+        letter-spacing: 2px;
+
+        text-shadow:
+            0 0 10px rgba(255,0,0,0.7);
+
+    }
+
+
+    /* OWNER NAME */
+    .bootSubtitle {
+
+        margin-top: 8px;
+
+        font-size: 14px;
+
+        letter-spacing: 1px;
+
+        opacity: 0.75;
+
+    }
+
+
+    /* ========================= */
+    /* ACTUAL LOADING BAR */
+    /* ========================= */
+
+    .bootProgressContainer {
+
+        width: 100%;
+
+        max-width: 360px;
+
+        height: 12px;
+
+        margin: 32px auto 0;
+
+        background: rgba(0,0,0,0.75);
+
+        border: 1px solid rgba(255,50,50,0.6);
+
+        border-radius: 20px;
+
+        overflow: hidden;
+
+        box-shadow:
+            0 0 10px rgba(255,0,0,0.4),
+            inset 0 0 8px rgba(0,0,0,0.9);
+
+    }
+
+
+    /* RED LOADING BAR */
+
+    .bootProgressBar {
+
+        width: 0%;
+
+        height: 100%;
+
+        border-radius: 20px;
+
+        background:
+
+            linear-gradient(
+                90deg,
+                #8b0000,
+                #ff0000,
+                #ff4d4d,
+                #ff0000
+            );
+
+        background-size: 200% 100%;
+
+        box-shadow:
+            0 0 8px #ff0000,
+            0 0 18px rgba(255,0,0,0.8);
+
+        transition: width 0.15s linear;
+
+        animation: progressGlow 1s linear infinite;
+
+    }
+
+
+    /* MOVING LIGHT INSIDE BAR */
+
+    @keyframes progressGlow {
+
+        0% {
+            background-position: 0% 50%;
+        }
+
+        100% {
+            background-position: 200% 50%;
+        }
+
+    }
+
+
+    /* PERCENTAGE */
+
+    .bootPercentage {
+
+        margin-top: 12px;
+
+        font-size: 14px;
+
+        font-weight: bold;
+
+        letter-spacing: 1px;
+
+        color: #ff3b3b;
+
+        text-shadow:
+            0 0 8px #ff0000;
+
+    }
+
+
+    /* LOADING TEXT */
+
+    .bootLoading {
+
+        margin-top: 8px;
+
+        font-size: 12px;
+
+        letter-spacing: 2px;
+
+        opacity: 0.7;
+
+    }
+
+
+    /* MOBILE */
+
+    @media (max-width: 600px) {
+
+        .bootLogo {
+
+            width: 85px;
+            height: 85px;
+
+            font-size: 27px;
+
+        }
+
+        .bootTitle {
+
+            font-size: 18px;
+
+            letter-spacing: 1.5px;
+
+        }
+
+        .bootSubtitle {
+
+            font-size: 13px;
+
+        }
+
+        .bootProgressContainer {
+
+            max-width: 300px;
+
+            height: 10px;
+
+        }
+
+                        }
+  
 </style>
 </head>
 <body>
 
+  <!-- ================= BOOT SCREEN HTML ================= -->
+
+<div id="bootScreen">
+
+    <div class="bootContent">
+
+        <!-- LOGO -->
+        <div class="bootLogo">
+            HH
+        </div>
+
+        <!-- BUSINESS NAME -->
+        <div class="bootTitle">
+            MULTISKILL TECHNICIAN
+        </div>
+
+        <!-- OWNER NAME -->
+        <div class="bootSubtitle">
+            Hemant Hardik
+        </div>
+
+
+        <!-- REAL LOADING BAR -->
+
+        <div class="bootProgressContainer">
+
+            <div
+                id="bootProgressBar"
+                class="bootProgressBar">
+            </div>
+
+        </div>
+
+
+        <!-- PERCENTAGE -->
+
+        <div
+            id="bootPercentage"
+            class="bootPercentage">
+
+            0%
+
+        </div>
+
+
+        <!-- LOADING TEXT -->
+
+        <div
+            id="bootLoading"
+            class="bootLoading">
+
+            INITIALIZING...
+
+        </div>
+
+    </div>
+
+</div>
+  
   <!-- NAVBAR -->
   <nav class="navbar">
     <div class="nav-container">
@@ -3939,5 +4334,166 @@ window.addEventListener('resize',v7Background);window.addEventListener('load',v7
   setInterval(syncAuth,500);
 })();
 </script>
+  <!-- ================= BOOT JAVASCRIPT ================= -->
+
+<script>
+
+(function () {
+
+    var progress = 0;
+
+    var progressBar =
+        document.getElementById("bootProgressBar");
+
+    var percentage =
+        document.getElementById("bootPercentage");
+
+    var loadingText =
+        document.getElementById("bootLoading");
+
+    var bootScreen =
+        document.getElementById("bootScreen");
+
+
+    /* LOADING MESSAGES */
+
+    var messages = [
+
+        "INITIALIZING...",
+
+        "LOADING WEBSITE...",
+
+        "PREPARING SERVICES...",
+
+        "LOADING FEATURES...",
+
+        "ALMOST READY..."
+
+    ];
+
+
+    /* UPDATE LOADING BAR */
+
+    var loadingInterval = setInterval(function () {
+
+        if (progress < 90) {
+
+            progress += Math.floor(
+                Math.random() * 4
+            ) + 1;
+
+            if (progress > 90) {
+                progress = 90;
+            }
+
+            progressBar.style.width =
+                progress + "%";
+
+            percentage.textContent =
+                progress + "%";
+
+
+            /* CHANGE LOADING TEXT */
+
+            var messageIndex =
+                Math.floor(progress / 20);
+
+            if (messageIndex >= messages.length) {
+                messageIndex = messages.length - 1;
+            }
+
+            loadingText.textContent =
+                messages[messageIndex];
+
+        }
+
+    }, 120);
+
+
+    /* WHEN WEBSITE FINISHES LOADING */
+
+    window.addEventListener("load", function () {
+
+        clearInterval(loadingInterval);
+
+
+        /* Complete the bar */
+
+        progress = 100;
+
+        progressBar.style.width = "100%";
+
+        percentage.textContent = "100%";
+
+        loadingText.textContent =
+            "READY";
+
+
+        /* Keep 100% visible briefly */
+
+        setTimeout(function () {
+
+            bootScreen.classList.add(
+                "bootHide"
+            );
+
+
+            /* Remove from page */
+
+            setTimeout(function () {
+
+                if (
+                    bootScreen &&
+                    bootScreen.parentNode
+                ) {
+
+                    bootScreen.parentNode.removeChild(
+                        bootScreen
+                    );
+
+                }
+
+            }, 900);
+
+        }, 500);
+
+    });
+
+
+    /* SAFETY FALLBACK */
+
+    setTimeout(function () {
+
+        if (
+            bootScreen &&
+            !bootScreen.classList.contains("bootHide")
+        ) {
+
+            clearInterval(loadingInterval);
+
+            progressBar.style.width = "100%";
+
+            percentage.textContent = "100%";
+
+            loadingText.textContent = "READY";
+
+            setTimeout(function () {
+
+                bootScreen.classList.add(
+                    "bootHide"
+                );
+
+            }, 500);
+
+        }
+
+    }, 8000);
+
+
+})();
+
+</script>
+
+<!-- ============== END BOOT ANIMATION ============== -->
 </body>
 </html>
