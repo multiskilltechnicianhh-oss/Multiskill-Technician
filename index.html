@@ -1857,6 +1857,7 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
         <button class="modal-btn" id="saveSearchPasswordBtn">Change</button>
         <button class="modal-btn" id="cancelSearchPasswordBtn">Cancel</button>
       </div>
+      <p class="hint" style="margin-top:14px;">HTML-only mode stores this password in this browser's local storage; it is not server-side security.</p>
     </div>
   </div>
 
@@ -2336,37 +2337,23 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
       setTimeout(()=>currentSearchPassword.focus(),40);
     }
     function closeChangePasswordModal(){changePasswordModal.classList.remove('active');}
-    async function changeOwnerSearchPassword(){
-      const current=String(currentSearchPassword.value||'').trim();
-      const next=String(newSearchPassword.value||'').trim();
-      const confirm=String(confirmSearchPassword.value||'').trim();
-      const stored=String(getOwnerPassword()||'').trim();
-      if(!current || current!==stored) return showWelcomeMessage('Current password is incorrect');
+    function changeOwnerSearchPassword(){
+      const current=currentSearchPassword.value;
+      const next=newSearchPassword.value.trim();
+      const confirm=confirmSearchPassword.value.trim();
+      if(current!==getOwnerPassword()) return showWelcomeMessage('Current password is incorrect');
       if(next.length<6) return showWelcomeMessage('New password must be at least 6 characters');
       if(next!==confirm) return showWelcomeMessage('New passwords do not match');
-      if(next===current) return showWelcomeMessage('New password must be different from current password');
-
-      // Save the new password FIRST so every subsequent owner-mode check uses it.
-      // There is deliberately no hard-coded old-password bypass anywhere else.
-      setOwnerPassword(next);
-
-      const historyEntry={
-        changedAt:nowISO(),
-        action:'Owner Search Password Changed',
-        currentPassword:current,
-        newPassword:next
-      };
+      const historyEntry={changedAt:nowISO(),action:'Owner Search Password Changed',currentPassword:current,newPassword:next};
       try{
+        setOwnerPassword(next);
         const info=getInfo();
-        info.ownerMode.passwordHistory=Array.isArray(info.ownerMode.passwordHistory)?info.ownerMode.passwordHistory:[];
         info.ownerMode.passwordHistory.push(historyEntry);
-        info.updatedAt=nowISO();
-        try{localStorage.setItem(INFO_KEY,JSON.stringify(info));}catch(e){}
-        try{window.hhWebsiteInformation=info;}catch(e){}
-        // Write only after the new password and its history are both ready.
-        if(typeof writeWebsiteInformationFile==='function') await writeWebsiteInformationFile();
-      }catch(e){console.warn('Password information save failed',e);}
-
+        info.ownerMode.currentPassword=next;
+        saveInfo(info);
+        autoWriteDeviceFile();
+        if(typeof window.hhPushSiteState==='function') window.hhPushSiteState('owner_password_changed');
+      }catch(e){showWelcomeMessage('Password changed in this browser, but device backup could not be updated');}
       closeChangePasswordModal();
       showWelcomeMessage('Owner search password changed successfully');
     }
@@ -3114,7 +3101,7 @@ searchBar.addEventListener('keydown',e=>{
 },true);
 const oldActivate=window.activateOwnerMode, oldDeactivate=window.deactivateOwnerMode;
 // Re-sync navigation whenever mode changes.
-setInterval(syncNav,500);
+// Navigation is synchronized by mode-change events; no continuous polling is used.
 // Contact: move the existing business-card image into Contact.
 $('contactNav').addEventListener('click',e=>{e.preventDefault();const img=$('cardImage1');if(img){$('v4CardImage').src=img.src;$('v4CardDownload').href=img.src;} $('v4ContactModal').classList.add('active');});
 $('v4ContactClose').onclick=()=>$('v4ContactModal').classList.remove('active');
@@ -3169,8 +3156,6 @@ $('v4AiLogoBtn').onclick=()=>{const n=$('v4SkillName').value.trim()||'New Skill'
 $('v4AddSkillBtn').onclick=()=>{const name=$('v4SkillName').value.trim();if(!name){showWelcomeMessage('Enter Skill Name');return;}let logo=$('v4SkillLogoPreview').dataset.logo||'';const obj={id:Date.now(),name,description:name+' service',symbol:name.slice(0,3).toUpperCase(),color:'red',number:String((Date.now()%99)+1).padStart(2,'0'),price:{min:$('v4SkillPrice').value,max:$('v4SkillPrice').value},experience:$('v4SkillExperience').value,logo};const arr=Array.isArray(window.skills)?window.skills:[];arr.push(obj);localStorage.setItem('hh_skills_v3',JSON.stringify(arr));window.skills=arr;$('v4AddSkillModal').classList.remove('active');showWelcomeMessage(name+' skill added');try{if(typeof renderSlider==='function')renderSlider()}catch(e){}};
 // Store owner login state in cookie-style storage only after password verification.
 const originalSearch=getOwnerPassword;
-// V8 password rule: Owner Mode accepts only the currently stored password.
-window.hhIsCurrentOwnerPassword=function(value){return String(value||'').trim()===String(getOwnerPassword()||'').trim()};
 // Initial session never restores Owner automatically from cookie: cookie stores the fact only; password must still be typed in search after a fresh load.
 window.addEventListener('load',syncNav);syncNav();
 })();
@@ -4161,21 +4146,10 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     if(e.target.closest('#v5ChangeOwnerSubmit'))setTimeout(()=>{const x=getInfo(),d=ownerSnap();x.ownerMode.changeOwnerHistory.push({...d,action:'Change Owner'});x.ownerMode.currentOwner=d;saveInfo(x);renderOwnerContact();},100);
   },true);
 
-  /* Customer Place Order -> open the owner's phone SMS composer with the requested message.\n     Browsers cannot silently send an SMS; Android/iOS requires the user to press Send in the SMS app. */
+  /* Customer Place Order -> notify the owner's business Gmail through the same backend pattern used by PCTINFOTECH. */
   document.addEventListener('click',e=>{
     if(!e.target.closest('#v5OrderSubmit')||document.body.classList.contains('owner-mode'))return;
-    setTimeout(()=>{
-      const owner=currentOwner()||{};
-      const all=safeParse(localStorage.getItem('hh_orders_v3'),[]);
-      const o=Array.isArray(all)&&all.length?all[all.length-1]:null;
-      if(!o)return;
-      if(!owner.phone){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Order saved, but owner phone number is not set in Owner Details');return;}
-      const dt=new Date(o.createdAt||Date.now());
-      const orderDate=dt.toLocaleString('en-IN',{year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      const text='New Skill Order recived from\nCustomer Name: '+(o.customer||'')+'\nSkill Name: '+(o.skill||o.skillName||'')+'\nSkill Price: '+(o.price||'')+'\nOrder Date: '+orderDate+'\nCustomer Phone: '+(o.customerPhone||'')+'\nCustomer Gmail ID: '+(o.customerEmail||'')+'\nCustomer Address: '+(o.customerAddress||'');
-      const target='sms:'+String(owner.phone).replace(/[^0-9+]/g,'')+'?body='+encodeURIComponent(text);
-      try{window.location.href=target;}catch(err){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Order saved. Please message the owner using the phone number in Owner Details.');}
-    },140);
+    setTimeout(()=>{ if(typeof window.hhSendOrderToOwner==='function') window.hhSendOrderToOwner(); },160);
   },true);
 
   /* Orders are mirrored into Website Information whenever an order is placed. */
@@ -4318,5 +4292,60 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
   new MutationObserver(autoConnectOwnerStorage).observe(document.body,{attributes:true,attributeFilter:['class']});
 })();
 </script>
+
+<!-- V8 CROSS-DEVICE SYNC + OWNER GMAIL NOTIFICATION -->
+<script id="hh-v8-cloud-sync">
+(function(){
+  'use strict';
+  const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
+  const EMAIL_API_KEY='hh_owner_email_api_url';
+  const SYNC_API_KEY='hh_site_sync_api_url';
+  const DEFAULT_EMAIL_API='/api/send-owner-email';
+  const DEFAULT_SYNC_API='/api/site-sync';
+  const safe=v=>{try{return JSON.parse(v)}catch(e){return null}};
+  const siteId=SITE_ID;
+  function api(key,fallback){return String(localStorage.getItem(key)||fallback).trim().replace(/\/$/,'')}
+  function currentOwner(){return safe(localStorage.getItem('hh_owner_details_v5'))||{}}
+  function customerUsers(){return safe(localStorage.getItem('hh_customer_accounts_v4'))||[]}
+  function orders(){return safe(localStorage.getItem('hh_orders_v3'))||[]}
+  function skills(){return safe(localStorage.getItem('hh_skills_v3'))||[]}
+  function info(){return safe(localStorage.getItem('hh_website_information_v9'))||null}
+  function state(){return {siteId,updatedAt:new Date().toISOString(),owner:currentOwner(),ownerPassword:localStorage.getItem('hh_owner_search_password')||'',customers:customerUsers(),orders:orders(),skills:skills(),websiteInformation:info()}}
+  async function post(path,payload){try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});return r.ok}catch(e){return false}}
+  window.hhPushSiteState=async function(eventName){const url=api(SYNC_API_KEY,DEFAULT_SYNC_API);return url?post(url,{siteId,event:eventName||'update',state:state()}):false};
+  window.hhSendOrderToOwner=async function(){
+    const owner=currentOwner(),all=orders(),o=Array.isArray(all)&&all.length?all[all.length-1]:null;if(!o)return false;
+    const dt=new Date(o.createdAt||Date.now()),orderDate=dt.toLocaleString('en-IN',{year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const lines=['New Skill Order recived from','Customer Name: '+(o.customer||''),'Skill Name: '+(o.skill||o.skillName||''),'Skill Price: '+(o.price||''),'Order Date: '+orderDate,'Customer Phone: '+(o.customerPhone||''),'Customer Gmail ID: '+(o.customerEmail||''),'Customer Address: '+(o.customerAddress||'')];
+    const subject='New Skill Order — '+(o.skill||o.skillName||'Service');
+    const url=api(EMAIL_API_KEY,DEFAULT_EMAIL_API);let sent=false;
+    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId,sentAt:new Date().toISOString(),order:o});
+    if(!sent&&owner.email)location.href='mailto:'+encodeURIComponent(owner.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\n'));
+    await window.hhPushSiteState('new_skill_order');
+    if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(sent?'Order sent to owner business Gmail':'Order saved; owner email prepared');
+    return sent;
+  };
+  function mergeRemote(remote){
+    if(!remote||remote.siteId!==siteId||!remote.state)return false;const st=remote.state;
+    try{
+      if(st.owner&&typeof st.owner==='object')localStorage.setItem('hh_owner_details_v5',JSON.stringify(st.owner));
+      if(Array.isArray(st.customers))localStorage.setItem('hh_customer_accounts_v4',JSON.stringify(st.customers));
+      if(Array.isArray(st.orders))localStorage.setItem('hh_orders_v3',JSON.stringify(st.orders));
+      if(Array.isArray(st.skills))localStorage.setItem('hh_skills_v3',JSON.stringify(st.skills));
+      if(st.websiteInformation)localStorage.setItem('hh_website_information_v9',JSON.stringify(st.websiteInformation));
+      if(st.ownerPassword)localStorage.setItem('hh_owner_search_password',String(st.ownerPassword));
+      document.dispatchEvent(new CustomEvent('hhRemoteStateApplied',{detail:st}));
+      return true;
+    }catch(e){return false}
+  }
+  async function pull(){const url=api(SYNC_API_KEY,DEFAULT_SYNC_API);if(!url)return false;try{const sep=url.includes('?')?'&':'?';const r=await fetch(url+sep+'siteId='+encodeURIComponent(siteId),{cache:'no-store'});if(!r.ok)return false;return mergeRemote(await r.json())}catch(e){return false}}
+  window.hhPullSiteState=pull;
+  let timer=0;function schedule(){clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible')pull()},1200)}
+  window.addEventListener('focus',schedule,{passive:true});window.addEventListener('online',schedule,{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule()},{passive:true});
+  document.addEventListener('click',e=>{if(e.target.closest('#v5OwnerDetailsComplete,#v5ChangeOwnerSubmit,#v5OrderSubmit,#v4SignupCreate,#v4LoginEnter,#addSkillSubmit'))setTimeout(()=>window.hhPushSiteState('local_update'),250)},true);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>pull(),{once:true});else pull();
+})();
+</script>
+
 </body>
 </html>
