@@ -1538,6 +1538,12 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
 .hh-empty-orders{padding:30px;text-align:center;color:#666}
 @media(max-width:600px){.hh-brand-main{font-size:11px}.hh-brand-owner{font-size:8px}.hh-ai-center-title{top:-16px}.hh-order-sheet{font-size:11px}}
 </style>
+
+<style id="hh-v7-contact-customer-fix">
+/* Contact is a public tab: visible in Customer Mode and Owner Mode. */
+body:not(.owner-mode) #contactNav{display:flex!important;}
+body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!important;}
+</style>
 </head>
 <body>
 
@@ -1851,7 +1857,6 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
         <button class="modal-btn" id="saveSearchPasswordBtn">Change</button>
         <button class="modal-btn" id="cancelSearchPasswordBtn">Cancel</button>
       </div>
-      <p class="hint" style="margin-top:14px;">HTML-only mode stores this password in this browser's local storage; it is not server-side security.</p>
     </div>
   </div>
 
@@ -2324,21 +2329,44 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
 
     function openChangePasswordModal(){
       if(!isOwnerMode) return;
-      currentSearchPassword.value='';
+      currentSearchPassword.value=getOwnerPassword();
       newSearchPassword.value='';
       confirmSearchPassword.value='';
       changePasswordModal.classList.add('active');
       setTimeout(()=>currentSearchPassword.focus(),40);
     }
     function closeChangePasswordModal(){changePasswordModal.classList.remove('active');}
-    function changeOwnerSearchPassword(){
-      const current=currentSearchPassword.value;
-      const next=newSearchPassword.value.trim();
-      const confirm=confirmSearchPassword.value.trim();
-      if(current!==getOwnerPassword()) return showWelcomeMessage('Current password is incorrect');
+    async function changeOwnerSearchPassword(){
+      const current=String(currentSearchPassword.value||'').trim();
+      const next=String(newSearchPassword.value||'').trim();
+      const confirm=String(confirmSearchPassword.value||'').trim();
+      const stored=String(getOwnerPassword()||'').trim();
+      if(!current || current!==stored) return showWelcomeMessage('Current password is incorrect');
       if(next.length<6) return showWelcomeMessage('New password must be at least 6 characters');
       if(next!==confirm) return showWelcomeMessage('New passwords do not match');
+      if(next===current) return showWelcomeMessage('New password must be different from current password');
+
+      // Save the new password FIRST so every subsequent owner-mode check uses it.
+      // There is deliberately no hard-coded old-password bypass anywhere else.
       setOwnerPassword(next);
+
+      const historyEntry={
+        changedAt:nowISO(),
+        action:'Owner Search Password Changed',
+        currentPassword:current,
+        newPassword:next
+      };
+      try{
+        const info=getInfo();
+        info.ownerMode.passwordHistory=Array.isArray(info.ownerMode.passwordHistory)?info.ownerMode.passwordHistory:[];
+        info.ownerMode.passwordHistory.push(historyEntry);
+        info.updatedAt=nowISO();
+        try{localStorage.setItem(INFO_KEY,JSON.stringify(info));}catch(e){}
+        try{window.hhWebsiteInformation=info;}catch(e){}
+        // Write only after the new password and its history are both ready.
+        if(typeof writeWebsiteInformationFile==='function') await writeWebsiteInformationFile();
+      }catch(e){console.warn('Password information save failed',e);}
+
       closeChangePasswordModal();
       showWelcomeMessage('Owner search password changed successfully');
     }
@@ -2505,7 +2533,7 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
       const email=googleAccountEmail.value.trim().toLowerCase();
       const password=googleOwnerPassword.value.trim();
       if(!/^[^\s@]+@gmail\.com$/i.test(email)){showWelcomeMessage('Enter a valid Gmail ID first');googleAccountEmail.focus();return;}
-      if(password===getOwnerPassword()||password==='multiskilltechnicianHH'){
+      if(password===getOwnerPassword()){
         // ONLY the correct owner password can activate Owner Mode.
         activateOwnerMode();sessionStorage.setItem('hh_session_role','owner');sessionStorage.setItem('hh_session_email',email);
         loginModal.classList.remove('active');resetLoginFlow();showWelcomeMessage('Owner password correct — Owner Mode activated');
@@ -2867,7 +2895,6 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
     // =====================================
     // SLIDER EVENTS — FINGER-FOLLOW / SNAP
     // =====================================
-    /* Arrow buttons: keep finger swipe direction unchanged, but correct the button rotation. */
     prevBtn.addEventListener('click',nextSlide);
     nextBtn.addEventListener('click',previousSlide);
     let dragShift=0;
@@ -3021,7 +3048,7 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
 <div id="v4ContactModal" class="modal hh-contact-card-modal"><div class="modal-content"><button class="close-btn" id="v4ContactClose" type="button">&times;</button><h2 class="hh-modal-heading">Contact</h2><p class="hh-muted">Our business card is available here in both Customer and Owner mode.</p><img id="v4CardImage" alt="Hemant Hardik Multiskill Technician Business Card"><a id="v4CardDownload" class="download-card-btn" download="Hemant-Hardik-Multiskill-Technician-Business-Card.png">Download Business Card</a></div></div>
 <div id="v4LoginModal" class="modal hh-curved-modal"><div class="modal-content"><button class="close-btn" id="v4LoginClose" type="button">&times;</button><h2 class="hh-modal-heading">Customer Log In</h2><p class="hh-muted">Enter any one detail used when you created your account.</p><div class="hh-curved-form"><label>Company Name<input id="v4LoginCompany" autocomplete="organization"></label><label>Phone Number<input id="v4LoginPhone" type="tel" inputmode="tel" autocomplete="tel"></label><label>Gmail ID<input id="v4LoginEmail" type="email" inputmode="email" autocomplete="email"></label><button class="modal-btn" id="v4LoginEnter" type="button">Enter</button></div><p id="v4LoginMsg" class="hh-muted" style="margin-top:12px"></p></div></div>
 <div id="v4SignupModal" class="modal hh-curved-modal"><div class="modal-content"><button class="close-btn" id="v4SignupClose" type="button">&times;</button><h2 class="hh-modal-heading">Customer Sign Up</h2><p class="hh-muted">Create your customer account. These details can be remembered on this device when cookies are allowed.</p><div class="hh-curved-form"><label>Company Name<input id="v4SignupCompany" autocomplete="organization"></label><label>Name<input id="v4SignupName" autocomplete="name"></label><label>Phone Number<input id="v4SignupPhone" type="tel" inputmode="tel" autocomplete="tel"></label><label>Gmail ID<input id="v4SignupEmail" type="email" inputmode="email" autocomplete="email"></label><label>Address<textarea id="v4SignupAddress" autocomplete="street-address"></textarea></label><button class="modal-btn" id="v4SignupCreate" type="button">Create Account</button></div></div></div>
-<div id="v4CookiesModal" class="modal hh-curved-modal"><div class="modal-content"><h2 class="hh-modal-heading">Cookie Permission</h2><p class="hh-muted">This website uses cookies/browser storage to remember customer account details, login details, Gmail ID, phone number, address, customer orders, and the owner login state on this device. The owner password itself is not stored in cookie data.</p><div class="hh-cookie-actions"><button class="accept" id="v4CookieAllow" type="button">Allow Cookies</button><button id="v4CookieEssential" type="button">Only Essential</button></div></div></div>
+<div id="v4CookiesModal" class="modal hh-curved-modal"><div class="modal-content"><h2 class="hh-modal-heading">Cookie Permission</h2><p class="hh-muted">This website uses cookies/browser storage to remember customer account details, login details, Gmail ID, phone number, address, customer orders, and the owner login state on this device. Browser storage can be cleared by the browser; for durable backup, use the Website Information.txt file in Documents/Website Info.</p><div class="hh-cookie-actions"><button class="accept" id="v4CookieAllow" type="button">Allow Cookies</button><button id="v4CookieEssential" type="button">Only Essential</button></div></div></div>
 <div id="v4AddSkillModal" class="modal hh-curved-modal"><div class="modal-content" style="max-width:620px"><button class="close-btn" id="v4SkillClose" type="button">&times;</button><h2 class="hh-modal-heading">Add Skill</h2><p class="hh-muted">Create a new skill frame.</p><div class="hh-curved-form"><label>Skill Name<input id="v4SkillName" maxlength="50"></label><label>Skill Logo</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="modal-btn" id="v4CustomLogoBtn" type="button">Custom Logo</button><button class="modal-btn" id="v4AiLogoBtn" type="button">AI Logo</button></div><input id="v4SkillLogoFile" type="file" accept="image/*" style="display:none"><div id="v4SkillLogoPreview" class="hh-ai-logo-preview"></div><label>Skill Price<input id="v4SkillPrice" placeholder="e.g. 500 - 1000"></label><label>Skill Experience<select id="v4SkillExperience" style="width:100%;padding:13px;border-radius:18px;background:#111;color:#fff"><option value="biggner">Biggner</option><option value="Intermediate">Intermediate</option><option value="pro">Pro</option></select></label><button class="modal-btn" id="v4AddSkillBtn" type="button">Add Skill</button></div></div></div>
 <script>
 (function(){
@@ -3043,6 +3070,7 @@ function syncNav(){
  const loginItem=document.querySelector('#loginToggle')?.closest('.nav-item');
  if(loginItem) loginItem.style.display=owner?'none':'';
  const corder=$('customerOrderNavItem'); if(corder) corder.style.display=owner?'none':'';
+ const contactItem=$('contactNav')?.closest('.nav-item'); if(contactItem && !owner) contactItem.style.display='';
  const ownerOrder=$('orderDataNav')?.closest('.nav-item'); if(ownerOrder) ownerOrder.style.display=owner?'':'none';
 }
 // Cookies: show on every new visitor until a choice exists; consent can be changed by clearing site data.
@@ -3076,7 +3104,7 @@ $('v4SignupCreate').onclick=()=>{
 // Owner password in AI search bar is the only owner shortcut. Customer mode is also a search command.
 searchBar.addEventListener('keydown',e=>{
  if(e.key!=='Enter')return; const raw=searchBar.value.trim(), low=norm(raw); if(!raw)return;
- if(low===norm(getOwnerPassword()) || low==='multiskilltechnicianhh'){
+ if(low===norm(getOwnerPassword())){
    e.preventDefault();e.stopImmediatePropagation();if(!ensureCookies())return;
    activateOwnerMode();saveOwnerState();syncNav();return;
  }
@@ -3141,6 +3169,8 @@ $('v4AiLogoBtn').onclick=()=>{const n=$('v4SkillName').value.trim()||'New Skill'
 $('v4AddSkillBtn').onclick=()=>{const name=$('v4SkillName').value.trim();if(!name){showWelcomeMessage('Enter Skill Name');return;}let logo=$('v4SkillLogoPreview').dataset.logo||'';const obj={id:Date.now(),name,description:name+' service',symbol:name.slice(0,3).toUpperCase(),color:'red',number:String((Date.now()%99)+1).padStart(2,'0'),price:{min:$('v4SkillPrice').value,max:$('v4SkillPrice').value},experience:$('v4SkillExperience').value,logo};const arr=Array.isArray(window.skills)?window.skills:[];arr.push(obj);localStorage.setItem('hh_skills_v3',JSON.stringify(arr));window.skills=arr;$('v4AddSkillModal').classList.remove('active');showWelcomeMessage(name+' skill added');try{if(typeof renderSlider==='function')renderSlider()}catch(e){}};
 // Store owner login state in cookie-style storage only after password verification.
 const originalSearch=getOwnerPassword;
+// V8 password rule: Owner Mode accepts only the currently stored password.
+window.hhIsCurrentOwnerPassword=function(value){return String(value||'').trim()===String(getOwnerPassword()||'').trim()};
 // Initial session never restores Owner automatically from cookie: cookie stores the fact only; password must still be typed in search after a fresh load.
 window.addEventListener('load',syncNav);syncNav();
 })();
@@ -3883,7 +3913,7 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
   const nowISO=()=>new Date().toISOString();
 
   function getInfo(){
-    const fallback={version:1,updatedAt:nowISO(),ownerMode:{currentOwner:null,ownerDetailsHistory:[],changeOwnerHistory:[]},customerMode:{customers:[],signupHistory:[],loginHistory:[],orders:[]}};
+    const fallback={version:1,updatedAt:nowISO(),ownerMode:{currentOwner:null,ownerDetailsHistory:[],changeOwnerHistory:[],passwordHistory:[]},customerMode:{customers:[],signupHistory:[],loginHistory:[],orders:[]}};
     const x=safeParse(localStorage.getItem(INFO_KEY),fallback);
     x.ownerMode=x.ownerMode||fallback.ownerMode;
     x.customerMode=x.customerMode||fallback.customerMode;
@@ -3893,6 +3923,7 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     x.customerMode.orders=Array.isArray(x.customerMode.orders)?x.customerMode.orders:[];
     x.ownerMode.ownerDetailsHistory=Array.isArray(x.ownerMode.ownerDetailsHistory)?x.ownerMode.ownerDetailsHistory:[];
     x.ownerMode.changeOwnerHistory=Array.isArray(x.ownerMode.changeOwnerHistory)?x.ownerMode.changeOwnerHistory:[];
+    x.ownerMode.passwordHistory=Array.isArray(x.ownerMode.passwordHistory)?x.ownerMode.passwordHistory:[];
     return x;
   }
   function saveInfo(x){
@@ -3930,6 +3961,14 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     try{
       const root=await window.showDirectoryPicker({mode:'readwrite',startIn:'documents'});
       websiteInfoDirHandle=await root.getDirectoryHandle('Website Info',{create:true});
+      // If Chrome/site data was cleared, the physical TXT file can still contain the last owner password.
+      try{
+        const oldFh=await websiteInfoDirHandle.getFileHandle('Website Information.txt',{create:false});
+        const oldFile=await oldFh.getFile();
+        const oldText=await oldFile.text();
+        const matches=[...oldText.matchAll(/newPassword:\s*(.+)/g)];
+        if(matches.length){const recovered=String(matches[matches.length-1][1]||'').trim();if(recovered.length>=6)localStorage.setItem('hh_owner_search_password',recovered);}
+      }catch(e){}
       window.__hhWebsiteInfoConnected=true;
       await rememberFolderHandle(websiteInfoDirHandle);
       await writeWebsiteInformationFile();
@@ -3937,32 +3976,25 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
       return true;
     }catch(e){if(e&&e.name==='AbortError')return false;downloadWebsiteInformation();return false;}
   }
+  function websiteInformationDate(){
+    return new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  }
   function websiteInformationText(){
     const x=getInfo();
     const owner=x.ownerMode||{};
     const customer=x.customerMode||{};
     const ownerNow=owner.currentOwner||{};
     const names=Array.isArray(ownerNow.names)?ownerNow.names.filter(Boolean).join(' & '):(ownerNow.names||'');
-    const now=new Date();
-    const dateLabel=now.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
     const line=(label,value)=>String(label)+': '+String(value??'');
-    const recordDate=(r)=>{
-      const raw=r&&(r.timestamp||r.createdAt||r.updatedAt||r.date);
-      if(!raw)return dateLabel;
-      const d=new Date(raw);
-      return Number.isNaN(d.getTime())?dateLabel:d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
-    };
     const block=(arr,omitKeys=[])=>{
       if(!Array.isArray(arr)||!arr.length)return 'No records.';
       return arr.map((r,i)=>{
         if(r&&typeof r==='object'){
-          const details=Object.entries(r)
-            .filter(([k])=>!omitKeys.includes(k))
-            .map(([k,v])=>line(k,Array.isArray(v)?v.join(' & '):v&&typeof v==='object'?JSON.stringify(v):v))
-            .join('\n');
-          return 'Record '+(i+1)+' ('+recordDate(r)+')\n'+details;
+          return 'Record '+(i+1)+'\n'+Object.entries(r)
+            .filter(([k])=>!omitKeys.includes(k) && k!=='logo' && k!=='card')
+            .map(([k,v])=>line(k,Array.isArray(v)?v.join(' & '):v&&typeof v==='object'?JSON.stringify(v):v)).join('\n');
         }
-        return 'Record '+(i+1)+' ('+dateLabel+'):\n'+String(r);
+        return 'Record '+(i+1)+': '+String(r);
       }).join('\n\n');
     };
     return [
@@ -3971,32 +4003,35 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
       'Last Updated: '+(x.updatedAt||nowISO()),
       '',
       '============================================================',
-      'Owner Mode Details ('+dateLabel+')',
+      'Owner Mode Details( '+websiteInformationDate()+' )',
       '============================================================',
       line('Company',ownerNow.company||''),
       line('Owner Name',names),
       line('Owner Phone Number',ownerNow.phone||''),
       line('Owner Gmail ID',ownerNow.email||''),
       '',
-      '--- Owner Details Tab Details ---',
-      block(owner.ownerDetailsHistory,['logo','card']),
+      '--- OWNER DETAILS TAB DETAILS ---',
+      block(owner.ownerDetailsHistory),
       '',
-      '--- Change Owner Tab Details ---',
-      block(owner.changeOwnerHistory,['logo','card']),
+      '--- CHANGE OWNER TAB DETAILS ---',
+      block(owner.changeOwnerHistory),
+      '',
+      '--- OWNER SEARCH PASSWORD HISTORY ---',
+      block(owner.passwordHistory),
       '',
       '============================================================',
-      'Customer Mode Details ('+dateLabel+')',
+      'Customer Mode Details( '+websiteInformationDate()+' )',
       '============================================================',
-      '--- Customer Accounts ---',
+      '--- CUSTOMER ACCOUNTS ---',
       block(customer.customers),
       '',
-      '--- Sign Up Details ---',
+      '--- SIGN UP DETAILS ---',
       block(customer.signupHistory),
       '',
-      '--- Login Details ---',
+      '--- LOGIN DETAILS ---',
       block(customer.loginHistory),
       '',
-      '--- Orders ---',
+      '--- ORDERS ---',
       block(customer.orders),
       '',
       '============================================================',
@@ -4031,6 +4066,8 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     return false;
   }
   async function autoWriteDeviceFile(){if(websiteInfoDirHandle)await writeWebsiteInformationFile();}
+  // Reconnect is required after browser/site data is cleared; the physical TXT backup itself remains in Documents.
+  window.hhWebsiteInfoStorageNote=function(){return 'Website Information.txt is the durable backup. Browser storage can be deleted by Chrome; the text file is not deleted by clearing browser data. Reconnect the Documents/Website Info folder to continue automatic updates.';};
   window.hhChooseWebsiteInfoFolder=chooseWebsiteInfoFolder;
   window.hhDownloadWebsiteInformation=downloadWebsiteInformation;
   window.hhShareWebsiteInformation=shareWebsiteInformation;
@@ -4072,13 +4109,6 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     m.classList.add('active');
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-  /* Contact is a normal customer + owner tab. Never hide it in Customer Mode. */
-  function syncContactTabVisibility(){
-    const item=$('contactNav')?.closest('.nav-item');
-    if(item && !document.body.classList.contains('owner-mode')) item.style.display='block';
-  }
-  syncContactTabVisibility();
 
   /* Contact: show the business card image + current owner details in BOTH modes. */
   function renderOwnerContact(){
@@ -4158,7 +4188,7 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     const owner=document.body.classList.contains('owner-mode');
     const n=$('newCustomersNavItem');if(n)n.style.display=owner?'block':'none';
     if(!owner)$('hhNewCustomersModal')?.classList.remove('active');
-    if(!owner){$('v5CustomerLogo')?.remove();syncContactTabVisibility();}
+    if(!owner){$('v5CustomerLogo')?.remove();}
   }
   function boot(){installNewCustomersTab();syncCustomers();syncModeFeatures();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
