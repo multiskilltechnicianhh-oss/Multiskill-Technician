@@ -135,5 +135,8 @@ app.get('/api/site-sync', (req,res)=>{
 });
 
 app.use(express.static(__dirname));
-const PORT=process.env.PORT||3000;
-app.listen(PORT, '0.0.0.0', ()=>console.log(`Multiskill website server running on port ${PORT}`));
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Multiskill website server running on port ${PORT}`);
+});
