@@ -44,6 +44,9 @@ function writeText(all){
     blocks.push('Skills:');
     blocks.push(JSON.stringify(state.skills||[],null,2));
     blocks.push('');
+    blocks.push('Website Information Snapshot:');
+    blocks.push(JSON.stringify(state.websiteInformation||{},null,2));
+    blocks.push('');
   }
   fs.writeFileSync(TXT_FILE, blocks.join('\n'),'utf8');
 }
@@ -60,8 +63,12 @@ function mergeState(oldState, incoming, event){
     if(Array.isArray(incoming.skills)) next.skills=incoming.skills;
   } else if(ev==='customer_signup' || ev==='customer_login'){
     if(Array.isArray(incoming.customers)) next.customers=incoming.customers;
+    if(Array.isArray(incoming.orders)) next.orders=incoming.orders;
+    if(incoming.websiteInformation) next.websiteInformation=incoming.websiteInformation;
   } else if(ev==='new_skill_order'){
     if(Array.isArray(incoming.orders)) next.orders=incoming.orders;
+    if(Array.isArray(incoming.customers)) next.customers=incoming.customers;
+    if(incoming.websiteInformation) next.websiteInformation=incoming.websiteInformation;
   } else if(ev==='local_update' || ev==='update'){
     // Backward-compatible fallback for older V8 clients.
     if(incoming.owner) next.owner=incoming.owner;
@@ -82,12 +89,29 @@ function transporter(){
 
 app.post('/api/send-owner-email', async (req,res)=>{
   try{
-    const {to,subject,body,htmlBody}=req.body||{};
+    const {to,subject,body,htmlBody,siteId,state,event,order}=req.body||{};
     if(!to||!subject||!body)return res.status(400).json({ok:false,error:'Missing email fields'});
     const mailer=transporter();
     if(!mailer)return res.status(503).json({ok:false,error:'Gmail SMTP is not configured on the server'});
     await mailer.sendMail({from:process.env.OWNER_GMAIL_USER,to,subject,text:body,html:htmlBody||undefined});
-    res.json({ok:true});
+
+    /*
+      IMPORTANT: Gmail success is the point at which the new order is committed
+      to the shared server state. This makes the owner's Order/New Customers
+      tabs and Website Information.txt recoverable from the same server state.
+    */
+    if(siteId && state){
+      const all=load();
+      all[siteId]=mergeState(all[siteId],state,String(event||'new_skill_order'));
+      if(order){
+        const existing=Array.isArray(all[siteId].orders)?all[siteId].orders:[];
+        const id=String(order.id||'');
+        if(id && !existing.some(x=>String(x&&x.id||'')===id)) existing.push(order);
+        all[siteId].orders=existing;
+      }
+      save(all);
+    }
+    res.json({ok:true,saved:!!(siteId&&state)});
   }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
 });
 
@@ -111,8 +135,5 @@ app.get('/api/site-sync', (req,res)=>{
 });
 
 app.use(express.static(__dirname));
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Multiskill website server running on port ${PORT}`);
-});
+const PORT=process.env.PORT||3000;
+app.listen(PORT, '0.0.0.0', ()=>console.log(`Multiskill website server running on port ${PORT}`));

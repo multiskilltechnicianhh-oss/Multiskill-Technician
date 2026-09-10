@@ -1,17 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width,initial-scale=1.0">
-
-<meta name="hh-backend-base"
-      content="https://multiskill-technician-backend.onrender.com">
-
-<title>Hemant Hardik Multiskill Technician</title>
-  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hemant Hardik — Multiskill Technician</title>
   <style>
     /* =========================
        RESET & BASE STYLES
@@ -3946,7 +3938,17 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
   }
 
   /* Save a structured copy of all requested information on this device. */
-  window.hhSaveWebsiteInformation=function(){syncCustomers();return getInfo()};
+  window.hhSaveWebsiteInformation=function(){
+    const x=getInfo();
+    const remoteCustomers=safeParse(localStorage.getItem(USERS_KEY),[]).map(customerSnapshot).filter(Boolean);
+    const remoteOrders=safeParse(localStorage.getItem('hh_orders_v3'),[]);
+    x.customerMode.customers=remoteCustomers;
+    x.customerMode.orders=Array.isArray(remoteOrders)?remoteOrders:[];
+    const owner=currentOwner();
+    x.ownerMode.currentOwner=owner?{company:owner.company||'',names:owner.names||[],phone:owner.phone||'',email:owner.email||'',logo:owner.logo||'',card:owner.card||'',updatedAt:owner.updatedAt||nowISO()}:null;
+    saveInfo(x);
+    return x;
+  };
 
   /* Device file storage: one-time Documents-folder selection, then automatic updates. */
   let websiteInfoDirHandle=null;
@@ -4108,6 +4110,15 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     m.classList.add('active');
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+  window.hhRefreshNewCustomers=function(){
+    const m=$('hhNewCustomersModal');
+    if(!m || !m.classList.contains('active') || !document.body.classList.contains('owner-mode'))return;
+    const box=$('hhNewCustomersTable');
+    if(!box)return;
+    const rows=newCustomersRows();
+    if(!rows.length){box.innerHTML='<div class="hh-excel-empty">No customer accounts have been created yet.</div>';return;}
+    box.innerHTML='<table class="hh-excel-table"><thead><tr><th>Sr No</th><th>Customer Name</th><th>Customer Phone</th><th>Customer Gmail ID</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+r.sr+'</td><td>'+escapeHtml(r.name)+'</td><td>'+escapeHtml(r.phone)+'</td><td>'+escapeHtml(r.email)+'</td></tr>').join('')+'</tbody></table>';
+  };
 
   /* Contact: show the business card image + current owner details in BOTH modes. */
   function renderOwnerContact(){
@@ -4354,7 +4365,7 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
     const lines=['New Skill Order recived from','Customer Name: '+(o.customer||''),'Skill Name: '+(o.skill||o.skillName||''),'Skill Price: '+(o.price||''),'Order Date: '+orderDate,'Customer Phone: '+(o.customerPhone||''),'Customer Gmail ID: '+(o.customerEmail||''),'Customer Address: '+(o.customerAddress||'')];
     const subject='New Skill Order — '+(o.skill||o.skillName||'Service');
     const url=api(EMAIL_API_KEY,'/api/send-owner-email');let sent=false;
-    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId:SITE_ID,sentAt:new Date().toISOString(),order:o});
+    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId:SITE_ID,event:'new_skill_order',state:state(),sentAt:new Date().toISOString(),order:o});
     if(!sent&&owner.email)location.href='mailto:'+encodeURIComponent(owner.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\n'));
     await window.hhPushSiteState('new_skill_order');
     if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(sent?'Order sent to owner business Gmail':'Order saved; owner email prepared');
@@ -4417,6 +4428,9 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
       }
       if(Array.isArray(st.skills) && Array.isArray(window.skills)){window.skills.length=0;st.skills.forEach(x=>window.skills.push(x));if(typeof window.updateSlider==='function')window.updateSlider();}
       if(Array.isArray(st.orders) && Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));if(typeof window.renderOrders==='function')window.renderOrders();}
+      if(typeof window.hhRefreshNewCustomers==='function')window.hhRefreshNewCustomers();
+      /* Remote customer/order data is now also written to the owner's connected Website Information.txt. */
+      if(typeof window.hhSaveWebsiteInformation==='function')window.hhSaveWebsiteInformation();
       if(typeof window.hhRefreshContact==='function')window.hhRefreshContact();
     }catch(err){}
   });
