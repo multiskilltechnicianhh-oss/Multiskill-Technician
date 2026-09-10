@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="hh-backend-base" content="https://multiskill-technician-backend.onrender.com/">
+  <meta name="hh-backend-base" content="https://multiskill-technician-backend.onrender.com">
+
   <title>Hemant Hardik — Multiskill Technician</title>
   <style>
     /* =========================
@@ -1646,6 +1647,28 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
       <button id="nextBtn" type="button" aria-label="Next skill" title="Next skill">&gt;</button>
     </div>
 
+    <!-- COMPLETE WEBSITE DESCRIPTION -->
+    <section id="hhWebsiteDescription" class="hh-website-description" aria-labelledby="hhWebsiteDescriptionTitle">
+      <div class="hh-description-inner">
+        <h2 id="hhWebsiteDescriptionTitle">About Hemant Hardik Multiskill Technician</h2>
+        <p class="hh-description-lead">Welcome to our service website. We provide practical digital services through a simple customer mode, an owner management mode, shared work samples, online skill ordering, and a built-in website AI Assistant.</p>
+        <div class="hh-description-grid">
+          <article><h3>Owner &amp; Business Details</h3><div id="hhDescriptionOwnerDetails">Owner details are loaded from the current website owner profile.</div></article>
+          <article><h3>Business Card Details</h3><div id="hhDescriptionCardDetails">Our current business card is available from the Contact tab.</div><div id="hhDescriptionCardWrap"></div></article>
+          <article><h3>Contact Details</h3><div id="hhDescriptionContactDetails">Contact information is loaded from the current owner profile.</div></article>
+          <article><h3>Our Website AI Assistant</h3><p>The website includes an AI Assistant named <strong>Jennora</strong>. It can answer questions using the information built into this website and can help visitors find information about services, ordering, contact details, and website features.</p></article>
+          <article><h3>AI Assistant Limitations</h3><ul><li>Jennora is a website helper, not a human employee.</li><li>It can only use the information and functions available to the website; it may not know new information that has not been added to the site.</li><li>It does not replace professional, legal, financial, medical, or other specialist advice.</li><li>For an important or unclear request, contact the owner directly using the Contact information.</li><li>Internet, browser, backend, or device limitations can affect live/shared features.</li></ul></article>
+          <article><h3>Customer Mode — Home</h3><p><strong>Home</strong> opens the main website and shows the available skill frames. Tap a skill frame to view its description and estimated price, then use the order option if you want that service.</p></article>
+          <article><h3>Customer Mode — Work Samples</h3><p><strong>Work Samples</strong> lets customers view demonstrations uploaded by the owner. New shared demonstrations can appear on customer devices after the backend synchronizes them.</p></article>
+          <article><h3>Customer Mode — Order</h3><p><strong>Order</strong> lets a signed-in customer view their orders and their current order information. New orders are sent to the owner through the website backend and can be shown in the owner's Orders section.</p></article>
+          <article><h3>Customer Mode — Log In</h3><p><strong>Log In</strong> lets an existing customer access their saved customer session using the website's customer account details. Customer information is stored locally on the customer's device and shared with the backend when the relevant website action synchronizes it.</p></article>
+          <article><h3>Customer Mode — Sign Up</h3><p><strong>Sign Up</strong> creates a customer account using the requested company/name, phone, Gmail, and address details. The signup can be synchronized to the owner's New Customers information through the shared backend.</p></article>
+          <article><h3>Customer Mode — Contact</h3><p><strong>Contact</strong> shows the current business card and owner contact information so customers can reach the business.</p></article>
+        </div>
+        <p class="hh-description-note">Website data synchronization requires the configured backend service. Browser storage is device-specific. Clearing browser/site data can remove locally stored customer information; the owner-side shared records remain on the backend.</p>
+      </div>
+    </section>
+
     <!-- DETAIL MODAL -->
     <div id="detailModal" class="modal">
       <div class="modal-content">
@@ -2714,12 +2737,27 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
     // =====================================
     // DETAIL MODAL
     // =====================================
+    function formatSkillPrice(skill){
+      const p=skill?.price;
+      const clean=v=>String(v??'').trim().replace(/^Rs\.?\s*/i,'').replace(/₹/g,'').trim();
+      if(p&&typeof p==='object'){
+        const a=clean(p.min),b=clean(p.max);
+        if(a&&b&&a===b&&/^\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?$/.test(a)) return a.replace(/\s*[-–]\s*/g,' - ');
+        if(a&&b) return a===b?a:(a+' - '+b);
+        return a||b||'Contact for price';
+      }
+      let v=clean(p||'');
+      const parts=v.split(/\s*[-–]\s*/).map(x=>x.trim()).filter(Boolean);
+      if(parts.length===4&&parts[0]===parts[2]&&parts[1]===parts[3]) v=parts[0]+' - '+parts[1];
+      return v||'Contact for price';
+    }
+
     function showDetailModal(skill) {
       // Use the exact same skill-specific logo shown on the carousel card.
       modalSymbol.innerHTML = getSkillLogo(skill);
       modalTitle.textContent = skill.name;
       modalDescription.textContent = skill.description;
-      modalPrice.textContent = `Rs ${skill.price.min} - ${skill.price.max}`;
+      modalPrice.textContent = `Rs ${formatSkillPrice(skill)}`;
       detailModal.classList.add('active');
     }
 
@@ -3161,7 +3199,7 @@ $('v4SkillClose').onclick=()=>$('v4AddSkillModal').classList.remove('active');
 $('v4CustomLogoBtn').onclick=()=>$('v4SkillLogoFile').click();
 $('v4SkillLogoFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('v4SkillLogoPreview').innerHTML='<img style="width:82px;height:82px;object-fit:contain;border-radius:18px" src="'+r.result+'">';$('v4SkillLogoPreview').dataset.logo=r.result};r.readAsDataURL(f)};
 $('v4AiLogoBtn').onclick=()=>{const n=$('v4SkillName').value.trim()||'New Skill'; if(typeof generateAiSkillLogo==='function'){$('v4SkillLogoPreview').innerHTML=generateAiSkillLogo(n,Date.now()%100);$('v4SkillLogoPreview').dataset.logo=$('v4SkillLogoPreview').innerHTML;}};
-$('v4AddSkillBtn').onclick=()=>{const name=$('v4SkillName').value.trim();if(!name){showWelcomeMessage('Enter Skill Name');return;}let logo=$('v4SkillLogoPreview').dataset.logo||'';const obj={id:Date.now(),name,description:name+' service',symbol:name.slice(0,3).toUpperCase(),color:'red',number:String((Date.now()%99)+1).padStart(2,'0'),price:{min:$('v4SkillPrice').value,max:$('v4SkillPrice').value},experience:$('v4SkillExperience').value,logo};const arr=Array.isArray(window.skills)?window.skills:[];arr.push(obj);localStorage.setItem('hh_skills_v3',JSON.stringify(arr));window.skills=arr;$('v4AddSkillModal').classList.remove('active');showWelcomeMessage(name+' skill added');try{if(typeof renderSlider==='function')renderSlider()}catch(e){}};
+$('v4AddSkillBtn').onclick=()=>{const name=$('v4SkillName').value.trim();if(!name){showWelcomeMessage('Enter Skill Name');return;}let logo=$('v4SkillLogoPreview').dataset.logo||'';const raw=String($('v4SkillPrice').value||'').trim().replace(/^Rs\.?\s*/i,'').replace(/₹/g,'');const parts=raw.split(/\s*[-–]\s*/).map(x=>x.trim()).filter(Boolean);let price;if(parts.length>=2&&parts[0]&&parts[1])price={min:parts[0],max:parts[1]};else price={min:raw,max:raw};const obj={id:Date.now(),name,description:name+' service',symbol:name.slice(0,3).toUpperCase(),color:'red',number:String((Date.now()%99)+1).padStart(2,'0'),price,experience:$('v4SkillExperience').value,logo};const arr=Array.isArray(window.skills)?window.skills:[];arr.push(obj);localStorage.setItem('hh_skills_v3',JSON.stringify(arr));window.skills=arr;$('v4AddSkillModal').classList.remove('active');showWelcomeMessage(name+' skill added');try{if(typeof updateSlider==='function')updateSlider(0,true);else if(typeof renderSlider==='function')renderSlider()}catch(e){}};
 // Store owner login state in cookie-style storage only after password verification.
 const originalSearch=getOwnerPassword;
 // Initial session never restores Owner automatically from cookie: cookie stores the fact only; password must still be typed in search after a fresh load.
@@ -3641,15 +3679,22 @@ let v7CurrentSkill=null;
 function v7PatchDetail(){
   const actions=document.querySelector('#detailModal .modal-actions');if(!actions||q('removeThisSkillBtn'))return;
   const b=document.createElement('button');b.id='removeThisSkillBtn';b.className='modal-btn';b.type='button';b.textContent='Remove this Skill';actions.appendChild(b);
-  b.onclick=function(){
-    if(!document.body.classList.contains('owner-mode')||!v7CurrentSkill)return;
+  b.onclick=async function(){
+    if(!document.body.classList.contains('owner-mode'))return;
     let arr=[];try{arr=typeof skills!=='undefined'?skills:(Array.isArray(window.skills)?window.skills:[])}catch(e){arr=Array.isArray(window.skills)?window.skills:[]}
-    const idx=arr.findIndex(x=>String(x.id)===String(v7CurrentSkill.id));if(idx<0)return;
-    arr.splice(idx,1);window.skills=arr;try{if(typeof skills!=='undefined'&&skills!==arr){skills.length=0;arr.forEach(x=>skills.push(x));}}catch(e){}
+    const modalName=String(q('modalTitle')?.textContent||'').trim();
+    const target=v7CurrentSkill || arr.find(x=>String(x.name||'').trim()===modalName) || null;
+    if(!target){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Please open the skill you want to remove');return;}
+    const idx=arr.findIndex(x=>String(x.id)===String(target.id));
+    if(idx<0){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Selected skill was not found');return;}
+    const removedName=arr[idx].name||'Skill';
+    arr.splice(idx,1);window.skills=arr;
+    try{if(typeof skills!=='undefined'&&skills!==arr){skills.length=0;arr.forEach(x=>skills.push(x));}}catch(e){}
     localStorage.setItem('hh_skills_v3',JSON.stringify(arr));
     q('detailModal')?.classList.remove('active');
     if(typeof updateSlider==='function')updateSlider(0,true);
-    if(typeof showWelcomeMessage==='function')showWelcomeMessage('Skill removed successfully');
+    if(typeof window.hhPushSiteState==='function')await window.hhPushSiteState('skill_updated');
+    if(typeof showWelcomeMessage==='function')showWelcomeMessage(removedName+' removed successfully');
   };
 }
 v7PatchDetail();
@@ -3893,6 +3938,18 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
 #prevBtn:hover,#nextBtn:hover{background:rgba(255,107,107,.18);transform:translateY(-50%) scale(1.06);}
 #prevBtn:active,#nextBtn:active{transform:translateY(-50%) scale(.94);}
 @media(max-width:600px){#prevBtn,#nextBtn{width:42px;height:42px;font-size:28px;}#prevBtn{left:5px;}#nextBtn{right:5px;}}
+  .hh-website-description{width:min(1120px,94vw);margin:28px auto 44px;border:1px solid rgba(255,80,80,.25);border-radius:22px;background:linear-gradient(145deg,rgba(70,0,0,.45),rgba(0,0,0,.78));box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;color:#fff;text-align:left;}
+  .hh-description-inner{padding:28px;}
+  .hh-website-description h2{margin:0 0 10px;text-align:center;font-size:clamp(24px,4vw,36px);}
+  .hh-description-lead{text-align:center;max-width:900px;margin:0 auto 24px;color:#ddd;line-height:1.65;}
+  .hh-description-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .hh-description-grid article{padding:17px;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035);line-height:1.6;}
+  .hh-description-grid h3{margin:0 0 8px;color:#ff7777;font-size:18px;}
+  .hh-description-grid p{margin:0;color:#e7e7e7;}
+  .hh-description-grid ul{margin:7px 0 0 20px;padding:0;color:#e7e7e7;}
+  #hhDescriptionCardWrap img{display:block;width:min(100%,420px);max-height:260px;object-fit:contain;margin:12px auto 0;border-radius:12px;border:1px solid rgba(255,255,255,.15);}
+  .hh-description-note{margin:20px 0 0;padding:13px 15px;border-radius:12px;background:rgba(255,0,0,.07);color:#cfcfcf;font-size:13px;line-height:1.55;}
+  @media(max-width:700px){.hh-description-grid{grid-template-columns:1fr}.hh-description-inner{padding:19px}.hh-website-description{width:min(96vw,1120px)}}
 </style>
 <script id="v9-requested-upgrades-script">
 (function(){
@@ -4574,17 +4631,29 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
         if(st.owner.logo){$('logoImg')?.setAttribute('src',st.owner.logo);document.querySelectorAll('.logo img').forEach(x=>x.src=st.owner.logo);}
         if(st.owner.card){$('cardImage1')?.setAttribute('src',st.owner.card);$('v4CardImage')?.setAttribute('src',st.owner.card);}
       }
-      if(Array.isArray(st.customers))localStorage.setItem(CUSTOMER_KEY,JSON.stringify(st.customers));
+      const isOwnerDevice=document.body.classList.contains('owner-mode');
+      const localCustomerBefore=(()=>{try{return JSON.parse(localStorage.getItem(CUSTOMER_KEY)||'[]')}catch(e){return[]}})();
+      const localOrdersBefore=(()=>{try{return JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')}catch(e){return[]}})();
+      if(Array.isArray(st.customers) && isOwnerDevice)localStorage.setItem(CUSTOMER_KEY,JSON.stringify(st.customers));
       if(Array.isArray(st.orders)){
-        localStorage.setItem(ORDERS_KEY,JSON.stringify(st.orders));
-        if(Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));}
+        if(isOwnerDevice){
+          localStorage.setItem(ORDERS_KEY,JSON.stringify(st.orders));
+          if(Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));}
+        }else{
+          const u=safe(localStorage.getItem(SESSION_KEY)||sessionStorage.getItem(SESSION_KEY),null);
+          const e=String(u?.email||'').trim().toLowerCase(),ph=String(u?.phone||'').trim(),n=String(u?.name||'').trim().toLowerCase(),c=String(u?.company||'').trim().toLowerCase();
+          const own=st.orders.filter(o=>{const oe=String(o.customerEmail||o.email||'').trim().toLowerCase(),op=String(o.customerPhone||o.phone||'').trim(),on=String(o.customer||'').trim().toLowerCase(),oc=String(o.customerCompany||o.company||'').trim().toLowerCase();return (e&&oe===e)||(ph&&op===ph)||(n&&on===n)||(c&&oc===c);});
+          const byId=new Map(localOrdersBefore.map(o=>[String(o.id),o]));own.forEach(o=>byId.set(String(o.id),{...(byId.get(String(o.id))||{}),...o}));
+          const ownOrders=[...byId.values()];localStorage.setItem(ORDERS_KEY,JSON.stringify(ownOrders));
+          if(Array.isArray(window.orders)){window.orders.length=0;ownOrders.forEach(x=>window.orders.push(x));}
+        }
       }
       if(Array.isArray(st.skills)){
         localStorage.setItem(SKILLS_KEY,JSON.stringify(st.skills));
         if(Array.isArray(window.skills)){window.skills.length=0;st.skills.forEach(x=>window.skills.push(x));}
       }
       if(Array.isArray(st.workSamples))localStorage.setItem('hh_remote_work_samples_v1',JSON.stringify(st.workSamples));
-      if(st.websiteInformation)localStorage.setItem(INFO_KEY,JSON.stringify(st.websiteInformation));
+      if(st.websiteInformation && isOwnerDevice)localStorage.setItem(INFO_KEY,JSON.stringify(st.websiteInformation));
       if(st.ownerPassword)localStorage.setItem('hh_owner_search_password',String(st.ownerPassword));
       syncLocalInfo({owner:st.owner,customers:st.customers,orders:st.orders,workSamples:st.workSamples});
       document.dispatchEvent(new CustomEvent('hhRemoteStateApplied',{detail:st}));
@@ -4757,6 +4826,133 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installDeleteAccount();modeUI();}, {once:true});else{installDeleteAccount();modeUI();}
 })();
 
+</script>
+
+<script id="hh-v11-final-fixes">
+(function(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const safe=(v,f)=>{try{const x=JSON.parse(v);return x??f}catch(e){return f}};
+  const norm=v=>String(v??'').trim().toLowerCase();
+  const CUSTOMER_KEY='hh_customer_accounts_v4', SESSION_KEY='hh_customer_session_v4', ORDERS_KEY='hh_orders_v3', INFO_KEY='hh_website_information_v9';
+  function currentCustomer(){return safe(sessionStorage.getItem(SESSION_KEY)||localStorage.getItem(SESSION_KEY),null)}
+  function users(){return safe(localStorage.getItem(CUSTOMER_KEY),[])}
+  function orders(){return safe(localStorage.getItem(ORDERS_KEY),[])}
+  function info(){return safe(localStorage.getItem(INFO_KEY),{})}
+  function owner(){return safe(localStorage.getItem('hh_owner_details_v5'),{})}
+
+  // ---------- Customer-only Delete Account ----------
+  function installDeleteAccountV11(){
+    let li=$('hhDeleteAccountNavItem');
+    if(!li){
+      const nav=$('navMenu');if(!nav)return;
+      li=document.createElement('li');li.className='nav-item';li.id='hhDeleteAccountNavItem';
+      const b=document.createElement('button');b.type='button';b.className='nav-link';b.id='hhDeleteAccountBtn';b.textContent=' Delete Account';
+      li.appendChild(b);nav.appendChild(li);
+      b.addEventListener('click',function(e){
+        e.preventDefault();e.stopImmediatePropagation();
+        const u=currentCustomer();
+        if(!u){window.showWelcomeMessage?.('Please log in to delete your customer account');return;}
+        if(!confirm('Delete this customer account and its saved customer data from THIS DEVICE only? The owner/backend copy will NOT be deleted.'))return;
+        const match=x=>norm(x.email)===norm(u.email)||norm(x.phone)===norm(u.phone)||norm(x.company)===norm(u.company);
+        // Remove the matching customer account(s), its local orders, and local history.
+        localStorage.setItem(CUSTOMER_KEY,JSON.stringify(users().filter(x=>!match(x))));
+        localStorage.setItem(ORDERS_KEY,JSON.stringify(orders().filter(o=>!(norm(o.customerEmail||o.email)===norm(u.email)||norm(o.customerPhone||o.phone)===norm(u.phone)||norm(o.customer)===norm(u.name)||norm(o.customer)===norm(u.company)))));
+        sessionStorage.removeItem(SESSION_KEY);localStorage.removeItem(SESSION_KEY);localStorage.removeItem('hh_customer_order_details_v8');
+        const x=info();x.customerMode=x.customerMode||{};
+        for(const k of ['customers','signupHistory','loginHistory','orders'])x.customerMode[k]=Array.isArray(x.customerMode[k])?x.customerMode[k].filter(c=>!match(c)&&!(c&&norm(c.customerEmail||c.email)===norm(u.email)&&k==='orders')):[];
+        localStorage.setItem(INFO_KEY,JSON.stringify(x));
+        document.body.classList.remove('customer-logged-in');
+        try{window.hhWebsiteInformation=x;window.hhSaveWebsiteInformation?.()}catch(err){}
+        li.style.display='none';
+        window.showWelcomeMessage?.('Customer account deleted from this device. Owner/backend records were not deleted.');
+      },true);
+    }
+    const logged=!!currentCustomer()&&!document.body.classList.contains('owner-mode');
+    li.style.display=logged?'block':'none';
+  }
+
+  // ---------- Skill price normalization ----------
+  function cleanPrice(v){return String(v??'').trim().replace(/^Rs\.?\s*/i,'').replace(/₹/g,'').trim()}
+  function priceText(skill){
+    const p=skill?.price;
+    if(p&&typeof p==='object'){
+      const a=cleanPrice(p.min),b=cleanPrice(p.max);
+      if(a&&b&&a===b&&/^\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?$/.test(a))return a.replace(/\s*[-–]\s*/g,' - ');
+      if(a&&b)return a===b?a:a+' - '+b;
+      return a||b||'Contact for price';
+    }
+    let v=cleanPrice(p);const parts=v.split(/\s*[-–]\s*/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length===4&&parts[0]===parts[2]&&parts[1]===parts[3])v=parts[0]+' - '+parts[1];
+    return v||'Contact for price';
+  }
+  function fixStoredSkillPrices(){
+    const a=safe(localStorage.getItem('hh_skills_v3'),[]);if(!Array.isArray(a))return;
+    let changed=false;
+    a.forEach(s=>{const p=s?.price;if(p&&typeof p==='object'&&cleanPrice(p.min)===cleanPrice(p.max)&&/^\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?$/.test(cleanPrice(p.min))){const parts=cleanPrice(p.min).split(/\s*[-–]\s*/);s.price={min:parts[0],max:parts[1]};changed=true}});
+    if(changed){localStorage.setItem('hh_skills_v3',JSON.stringify(a));if(Array.isArray(window.skills)){window.skills.length=0;a.forEach(x=>window.skills.push(x));}window.updateSlider?.(0,true);}
+  }
+
+  // ---------- Robust Remove Skill ----------
+  document.addEventListener('click',function(e){
+    const b=e.target.closest('#removeThisSkillBtn');if(!b||!document.body.classList.contains('owner-mode'))return;
+    // The earlier handler may also run. This handler is a safety net only when the selected card is still present.
+    setTimeout(()=>{
+      const title=String($('modalTitle')?.textContent||'').trim();
+      const a=Array.isArray(window.skills)?window.skills:[];
+      if(!title||a.some(x=>String(x.name||'').trim()===title)){
+        const selected=Array.isArray(window.skills)?window.skills.find(x=>String(x.name||'').trim()===title):null;
+        // If the earlier handler already removed it, nothing is done.
+        if(!selected){localStorage.setItem('hh_skills_v3',JSON.stringify(a));window.hhPushSiteState?.('skill_updated');window.updateSlider?.(0,true);}
+      }
+    },180);
+  },true);
+
+  // ---------- Dynamic website description ----------
+  function renderDescription(){
+    const d=owner()||{};const names=Array.isArray(d.names)?d.names.filter(Boolean).join(' & '):(d.names||'Hemant Hardik');
+    const od=$('hhDescriptionOwnerDetails'),cd=$('hhDescriptionContactDetails'),cw=$('hhDescriptionCardWrap'),ct=$('hhDescriptionCardDetails');
+    if(od)od.innerHTML='<p><strong>Business:</strong> '+escapeHtml(d.company||'MULTISKILL TECHNICIAN')+'</p><p><strong>Owner name:</strong> '+escapeHtml(names)+'</p>';
+    if(cd)cd.innerHTML='<p><strong>Phone:</strong> '+(d.phone?'<a href="tel:'+encodeURIComponent(d.phone)+'">'+escapeHtml(d.phone)+'</a>':'Not set')+'</p><p><strong>Gmail:</strong> '+(d.email?'<a href="mailto:'+encodeURIComponent(d.email)+'">'+escapeHtml(d.email)+'</a>':'Not set')+'</p><p>Use the Contact tab to view the complete current business card.</p>';
+    if(ct)ct.textContent=d.card?'The current owner business card is shown below.':'The owner can add or change the business card from Owner Details.';
+    if(cw){cw.innerHTML='';const src=d.card||$('cardImage1')?.src||'';if(src){const img=document.createElement('img');img.src=src;img.alt='Hemant Hardik Multiskill Technician business card';cw.appendChild(img);}}
+  }
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+  document.addEventListener('click',e=>{if(e.target.closest('#v4SignupCreate,#v4LoginEnter,#v5OwnerDetailsComplete,#v5ChangeOwnerSubmit'))setTimeout(()=>{installDeleteAccountV11();renderDescription();},300)},true);
+  // Customer devices must never replace their local account/order database with
+  // the owner's complete shared customer/order list. Keep the local customer
+  // account private while still applying shared skill/work-sample updates and
+  // the signed-in customer's own order status.
+  let customerLocalSnapshot=null;
+  function snapshotCustomerLocal(){
+    if(document.body.classList.contains('owner-mode')){customerLocalSnapshot=null;return;}
+    customerLocalSnapshot={users:users(),orders:orders(),info:info()};
+  }
+  function restoreCustomerLocalAfterRemote(st){
+    if(document.body.classList.contains('owner-mode')||!customerLocalSnapshot)return;
+    const u=currentCustomer();
+    const localUsers=customerLocalSnapshot.users||[];
+    const localOrders=customerLocalSnapshot.orders||[];
+    // Restore the customer's local account list so Delete Account remains local-only.
+    localStorage.setItem(CUSTOMER_KEY,JSON.stringify(localUsers));
+    const ownEmail=norm(u?.email),ownPhone=norm(u?.phone),ownName=norm(u?.name),ownCompany=norm(u?.company);
+    const remoteOwn=Array.isArray(st?.orders)?st.orders.filter(o=>{
+      const e=norm(o.customerEmail||o.email),ph=norm(o.customerPhone||o.phone),n=norm(o.customer),c=norm(o.customerCompany||o.company);
+      return (ownEmail&&e===ownEmail)||(ownPhone&&ph===ownPhone)||(ownName&&n===ownName)||(ownCompany&&c===ownCompany);
+    }):[];
+    // Merge only this customer's remote orders into their local order list.
+    const byId=new Map(localOrders.map(o=>[String(o.id),o]));
+    remoteOwn.forEach(o=>byId.set(String(o.id),{...(byId.get(String(o.id))||{}),...o}));
+    localStorage.setItem(ORDERS_KEY,JSON.stringify([...byId.values()]));
+    localStorage.setItem(INFO_KEY,JSON.stringify(customerLocalSnapshot.info||{}));
+    try{const sess=currentCustomer();if(sess){const matching=[...byId.values()].filter(o=>(ownEmail&&norm(o.customerEmail||o.email)===ownEmail)||(ownPhone&&norm(o.customerPhone||o.phone)===ownPhone));sess.orders=matching;sessionStorage.setItem(SESSION_KEY,JSON.stringify(sess));localStorage.setItem(SESSION_KEY,JSON.stringify(sess));}}catch(e){}
+  }
+  document.addEventListener('hhRemoteStateApplied',e=>{snapshotCustomerLocal();restoreCustomerLocalAfterRemote(e.detail||{});setTimeout(()=>{fixStoredSkillPrices();installDeleteAccountV11();renderDescription();},50)},true);
+  new MutationObserver(()=>installDeleteAccountV11()).observe(document.body,{attributes:true,attributeFilter:['class']});
+  window.addEventListener('load',()=>{setTimeout(()=>{fixStoredSkillPrices();installDeleteAccountV11();renderDescription();},100)});
+  if(document.readyState!=='loading'){fixStoredSkillPrices();installDeleteAccountV11();renderDescription();}
+})();
 </script>
 </body>
 </html>

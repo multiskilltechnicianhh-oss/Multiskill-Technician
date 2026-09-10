@@ -91,7 +91,12 @@ function mergeState(oldState, incoming, event){
     if(incoming.owner) next.owner=incoming.owner;
     if(incoming.ownerPassword) next.ownerPassword=incoming.ownerPassword;
   }
-  if(Array.isArray(incoming.skills) && ['skill_updated','owner_details_updated','owner_changed','local_update','update'].includes(ev)){
+  // Skill updates are authoritative: the owner's current list must be allowed
+  // to remove a skill as well as add one. Using a union here would resurrect
+  // deleted skill frames on the next device pull.
+  if(Array.isArray(incoming.skills) && ev==='skill_updated'){
+    next.skills=uniqBy(incoming.skills,x=>x.id||String(x.name||'').trim().toLowerCase());
+  } else if(Array.isArray(incoming.skills) && ['owner_details_updated','owner_changed','local_update','update'].includes(ev) && !Array.isArray(old.skills)){
     next.skills=mergeSkills(old.skills,incoming.skills);
   }
   if(Array.isArray(incoming.customers)) next.customers=mergeCustomers(old.customers,incoming.customers);
