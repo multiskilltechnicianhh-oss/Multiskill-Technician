@@ -1,16 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width,initial-scale=1.0">
-
-<meta name="hh-backend-base"
-      content="https://multiskill-technician-backend.onrender.com">
-
-<title>Hemant Hardik Multiskill Technician</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hemant Hardik — Multiskill Technician</title>
   <style>
     /* =========================
        RESET & BASE STYLES
@@ -2093,6 +2086,8 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
       whatsapp: `To send a photo or video on WhatsApp:\n\n1. Open the person's chat or a group.\n2. Tap the attachment/gallery button.\n3. Select the photo or video.\n4. Add a caption if you want.\n5. Tap Send.`,
       html: `HTML is the structure of a webpage. A basic page looks like this:\n\n<!DOCTYPE html>\n<html>\n<head><title>My Page</title></head>\n<body><h1>Hello</h1>
 
+
+
 </body>\n</html>\n\nHTML creates headings, paragraphs, buttons, images, links and other page elements.`,
       css: `CSS controls how HTML looks. For example:\n\nbody { font-family: Arial; }\nh1 { font-size: 32px; }\nbutton { padding: 10px 20px; }\n\nCSS can control colors, spacing, sizes, layouts, animations and responsive mobile design.`,
       javascript: `JavaScript adds behavior to webpages. For example:\n\nconst button = document.querySelector('button');\nbutton.addEventListener('click', () => {\n  alert('Hello!');\n});\n\nIt can respond to taps, change HTML/CSS, validate forms, store data locally and perform calculations.`,
@@ -2407,6 +2402,8 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
     // =====================================
     // RENDER ORDERS
     // =====================================
+    window.renderOrders=renderOrders;
+    window.renderOrders=renderOrders;
     function renderOrders() {
       ordersList.innerHTML = '';
       
@@ -2664,6 +2661,8 @@ body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!importa
       card.className=`card ${card.dataset.color||''} ${side<0?'left':'right'}`;
     }
 
+    window.updateSlider=updateSlider;
+    window.updateSlider=updateSlider;
     function updateSlider(dragShift=0,animate=true){
       let cards=[...slider.querySelectorAll('.card')];
 
@@ -4118,7 +4117,7 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     if(dl&&source){dl.href=source;dl.style.display='inline-flex';}
   }
   document.addEventListener('click',e=>{if(e.target.closest('#contactNav'))setTimeout(renderOwnerContact,0)},true);
-  window.addEventListener('load',renderOwnerContact);
+  window.hhRefreshContact=renderOwnerContact; window.addEventListener('load',renderOwnerContact);
 
   /* Keep the physical Website Information file synchronized after local data changes. */
   function queueDeviceSave(){if(!document.body.classList.contains('owner-mode')||!websiteInfoDirHandle)return;clearTimeout(window.__hhDeviceSaveTimer);window.__hhDeviceSaveTimer=setTimeout(()=>autoWriteDeviceFile(),250);}
@@ -4300,59 +4299,120 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
 })();
 </script>
 
-<!-- V8 CROSS-DEVICE SYNC + OWNER GMAIL NOTIFICATION -->
-<script id="hh-v8-cloud-sync">
+<!-- V9 REAL CROSS-DEVICE SYNC + OWNER GMAIL NOTIFICATION -->
+<script id="hh-v9-cloud-sync">
 (function(){
   'use strict';
+  /*
+    IMPORTANT FOR GITHUB PAGES:
+    GitHub Pages runs HTML/CSS/JS only. It cannot run server.js.
+    Put your deployed server URL below, for example:
+    const FIXED_BACKEND_BASE='https://your-server.example.com';
+    Leave it empty only when the HTML and Node server are on the same domain.
+  */
+  const FIXED_BACKEND_BASE='';
   const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
   const EMAIL_API_KEY='hh_owner_email_api_url';
   const SYNC_API_KEY='hh_site_sync_api_url';
-  const DEFAULT_EMAIL_API='/api/send-owner-email';
-  const DEFAULT_SYNC_API='/api/site-sync';
   const safe=v=>{try{return JSON.parse(v)}catch(e){return null}};
-  const siteId=SITE_ID;
-  function api(key,fallback){return String(localStorage.getItem(key)||fallback).trim().replace(/\/$/,'')}
+  const trimBase=v=>String(v||'').trim().replace(/\/$/,'');
+  function configuredBase(){
+    const meta=document.querySelector('meta[name="hh-backend-base"]');
+    const fromMeta=meta&&meta.content?meta.content:'';
+    const fromWindow=window.HH_BACKEND_BASE||'';
+    return trimBase(fromMeta||fromWindow||FIXED_BACKEND_BASE);
+  }
+  function api(key,fallback){
+    const custom=trimBase(localStorage.getItem(key)||'');
+    if(custom)return custom;
+    const base=configuredBase();
+    if(base)return base+fallback;
+    return fallback;
+  }
   function currentOwner(){return safe(localStorage.getItem('hh_owner_details_v5'))||{}}
   function customerUsers(){return safe(localStorage.getItem('hh_customer_accounts_v4'))||[]}
   function orders(){return safe(localStorage.getItem('hh_orders_v3'))||[]}
   function skills(){return safe(localStorage.getItem('hh_skills_v3'))||[]}
   function info(){return safe(localStorage.getItem('hh_website_information_v9'))||null}
-  function state(){return {siteId,updatedAt:new Date().toISOString(),owner:currentOwner(),ownerPassword:localStorage.getItem('hh_owner_search_password')||'',customers:customerUsers(),orders:orders(),skills:skills(),websiteInformation:info()}}
-  async function post(path,payload){try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});return r.ok}catch(e){return false}}
-  window.hhPushSiteState=async function(eventName){const url=api(SYNC_API_KEY,DEFAULT_SYNC_API);return url?post(url,{siteId,event:eventName||'update',state:state()}):false};
+  function state(){return {siteId:SITE_ID,updatedAt:new Date().toISOString(),owner:currentOwner(),ownerPassword:localStorage.getItem('hh_owner_search_password')||'',customers:customerUsers(),orders:orders(),skills:skills(),websiteInformation:info()}}
+  async function post(path,payload){try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify(payload),cache:'no-store'});return r.ok}catch(e){return false}}
+  window.hhPushSiteState=async function(eventName){
+    const url=api(SYNC_API_KEY,'/api/site-sync');
+    return url?post(url,{siteId:SITE_ID,event:eventName||'update',state:state()}):false;
+  };
   window.hhSendOrderToOwner=async function(){
     const owner=currentOwner(),all=orders(),o=Array.isArray(all)&&all.length?all[all.length-1]:null;if(!o)return false;
     const dt=new Date(o.createdAt||Date.now()),orderDate=dt.toLocaleString('en-IN',{year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const lines=['New Skill Order recived from','Customer Name: '+(o.customer||''),'Skill Name: '+(o.skill||o.skillName||''),'Skill Price: '+(o.price||''),'Order Date: '+orderDate,'Customer Phone: '+(o.customerPhone||''),'Customer Gmail ID: '+(o.customerEmail||''),'Customer Address: '+(o.customerAddress||'')];
     const subject='New Skill Order — '+(o.skill||o.skillName||'Service');
-    const url=api(EMAIL_API_KEY,DEFAULT_EMAIL_API);let sent=false;
-    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId,sentAt:new Date().toISOString(),order:o});
+    const url=api(EMAIL_API_KEY,'/api/send-owner-email');let sent=false;
+    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId:SITE_ID,sentAt:new Date().toISOString(),order:o});
     if(!sent&&owner.email)location.href='mailto:'+encodeURIComponent(owner.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\n'));
     await window.hhPushSiteState('new_skill_order');
     if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(sent?'Order sent to owner business Gmail':'Order saved; owner email prepared');
     return sent;
   };
   function mergeRemote(remote){
-    if(!remote||remote.siteId!==siteId||!remote.state)return false;const st=remote.state;
+    if(!remote||remote.siteId!==SITE_ID||!remote.state)return false;
+    const st=remote.state;
     try{
-      if(st.owner&&typeof st.owner==='object')localStorage.setItem('hh_owner_details_v5',JSON.stringify(st.owner));
+      if(st.owner&&typeof st.owner==='object'){
+        localStorage.setItem('hh_owner_details_v5',JSON.stringify(st.owner));
+        const d=st.owner;
+        document.querySelectorAll('.hh-brand-main').forEach(x=>x.textContent=d.company||'MULTISKILL TECHNICIAN');
+        document.querySelectorAll('.hh-brand-owner').forEach(x=>x.textContent=(d.names||[]).join(' & ')||'Hemant Hardik');
+        if(d.logo){const logo=document.getElementById('logoImg');if(logo)logo.src=d.logo;document.querySelectorAll('.logo img').forEach(im=>im.src=d.logo);}
+        if(d.card){const card=document.getElementById('cardImage1');if(card)card.src=d.card;const contactCard=document.getElementById('v4CardImage');if(contactCard)contactCard.src=d.card;}
+      }
       if(Array.isArray(st.customers))localStorage.setItem('hh_customer_accounts_v4',JSON.stringify(st.customers));
       if(Array.isArray(st.orders))localStorage.setItem('hh_orders_v3',JSON.stringify(st.orders));
       if(Array.isArray(st.skills))localStorage.setItem('hh_skills_v3',JSON.stringify(st.skills));
       if(st.websiteInformation)localStorage.setItem('hh_website_information_v9',JSON.stringify(st.websiteInformation));
-      if(st.ownerPassword)localStorage.setItem('hh_owner_search_password',String(st.ownerPassword));
+      if(Object.prototype.hasOwnProperty.call(st,'ownerPassword')&&st.ownerPassword)localStorage.setItem('hh_owner_search_password',String(st.ownerPassword));
       document.dispatchEvent(new CustomEvent('hhRemoteStateApplied',{detail:st}));
       return true;
     }catch(e){return false}
   }
-  async function pull(){const url=api(SYNC_API_KEY,DEFAULT_SYNC_API);if(!url)return false;try{const sep=url.includes('?')?'&':'?';const r=await fetch(url+sep+'siteId='+encodeURIComponent(siteId),{cache:'no-store'});if(!r.ok)return false;return mergeRemote(await r.json())}catch(e){return false}}
+  async function pull(){
+    const url=api(SYNC_API_KEY,'/api/site-sync');if(!url)return false;
+    try{const sep=url.includes('?')?'&':'?';const r=await fetch(url+sep+'siteId='+encodeURIComponent(SITE_ID),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});if(!r.ok)return false;return mergeRemote(await r.json())}catch(e){return false}
+  }
   window.hhPullSiteState=pull;
-  let timer=0;function schedule(){clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible')pull()},1200)}
-  window.addEventListener('focus',schedule,{passive:true});window.addEventListener('online',schedule,{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule()},{passive:true});
-  document.addEventListener('click',e=>{if(e.target.closest('#v5OwnerDetailsComplete,#v5ChangeOwnerSubmit,#v5OrderSubmit,#v4SignupCreate,#v4LoginEnter,#addSkillSubmit'))setTimeout(()=>window.hhPushSiteState('local_update'),250)},true);
+  let timer=0;
+  function schedule(){clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible')pull()},500)}
+  window.addEventListener('focus',schedule,{passive:true});
+  window.addEventListener('online',schedule,{passive:true});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule()},{passive:true});
+  document.addEventListener('click',e=>{
+    const t=e.target.closest('#v5OwnerDetailsComplete,#v5ChangeOwnerSubmit,#v5OrderSubmit,#v4SignupCreate,#v4LoginEnter,#addSkillSubmit');
+    if(!t)return;
+    const id=t.id;
+    const event=id==='v5OwnerDetailsComplete'?'owner_details_updated':id==='v5ChangeOwnerSubmit'?'owner_changed':id==='v4SignupCreate'?'customer_signup':id==='v4LoginEnter'?'customer_login':id==='addSkillSubmit'?'skill_updated':'new_skill_order';
+    setTimeout(()=>window.hhPushSiteState(event),300);
+  },true);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>pull(),{once:true});else pull();
 })();
 </script>
 
+
+<script id="hh-v9-remote-ui-refresh">
+(function(){
+  'use strict';
+  document.addEventListener('hhRemoteStateApplied',function(e){
+    const st=e.detail||{};
+    try{
+      if(st.owner){
+        document.querySelectorAll('.hh-brand-main').forEach(x=>x.textContent=st.owner.company||'MULTISKILL TECHNICIAN');
+        document.querySelectorAll('.hh-brand-owner').forEach(x=>x.textContent=(st.owner.names||[]).join(' & ')||'Hemant Hardik');
+        if(st.owner.logo){const img=document.getElementById('logoImg');if(img)img.src=st.owner.logo;}
+        if(st.owner.card){const card=document.getElementById('cardImage1');if(card)card.src=st.owner.card;const c=document.getElementById('v4CardImage');if(c)c.src=st.owner.card;}
+      }
+      if(Array.isArray(st.skills) && Array.isArray(window.skills)){window.skills.length=0;st.skills.forEach(x=>window.skills.push(x));if(typeof window.updateSlider==='function')window.updateSlider();}
+      if(Array.isArray(st.orders) && Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));if(typeof window.renderOrders==='function')window.renderOrders();}
+      if(typeof window.hhRefreshContact==='function')window.hhRefreshContact();
+    }catch(err){}
+  });
+})();
+</script>
 </body>
 </html>
