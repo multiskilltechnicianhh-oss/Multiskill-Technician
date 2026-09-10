@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="hh-backend-base"
-      content="https://multiskill-technician-backend.onrender.com">
+  <meta name="hh-backend-base" content="https://multiskill-technician-backend.onrender.com/">
   <title>Hemant Hardik — Multiskill Technician</title>
   <style>
     /* =========================
@@ -1546,6 +1545,7 @@ body:not(.owner-mode) .nav-owner-only{display:none!important} body.owner-mode .n
 body:not(.owner-mode) #contactNav{display:flex!important;}
 body:not(.owner-mode) #contactNav{visibility:visible!important;opacity:1!important;}
 </style>
+<meta name="hh-backend-base" content="https://YOUR-BACKEND.onrender.com">
 </head>
 <body>
 
@@ -3940,17 +3940,7 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
   }
 
   /* Save a structured copy of all requested information on this device. */
-  window.hhSaveWebsiteInformation=function(){
-    const x=getInfo();
-    const remoteCustomers=safeParse(localStorage.getItem(USERS_KEY),[]).map(customerSnapshot).filter(Boolean);
-    const remoteOrders=safeParse(localStorage.getItem('hh_orders_v3'),[]);
-    x.customerMode.customers=remoteCustomers;
-    x.customerMode.orders=Array.isArray(remoteOrders)?remoteOrders:[];
-    const owner=currentOwner();
-    x.ownerMode.currentOwner=owner?{company:owner.company||'',names:owner.names||[],phone:owner.phone||'',email:owner.email||'',logo:owner.logo||'',card:owner.card||'',updatedAt:owner.updatedAt||nowISO()}:null;
-    saveInfo(x);
-    return x;
-  };
+  window.hhSaveWebsiteInformation=function(){syncCustomers();return getInfo()};
 
   /* Device file storage: one-time Documents-folder selection, then automatic updates. */
   let websiteInfoDirHandle=null;
@@ -4112,15 +4102,6 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     m.classList.add('active');
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-  window.hhRefreshNewCustomers=function(){
-    const m=$('hhNewCustomersModal');
-    if(!m || !m.classList.contains('active') || !document.body.classList.contains('owner-mode'))return;
-    const box=$('hhNewCustomersTable');
-    if(!box)return;
-    const rows=newCustomersRows();
-    if(!rows.length){box.innerHTML='<div class="hh-excel-empty">No customer accounts have been created yet.</div>';return;}
-    box.innerHTML='<table class="hh-excel-table"><thead><tr><th>Sr No</th><th>Customer Name</th><th>Customer Phone</th><th>Customer Gmail ID</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+r.sr+'</td><td>'+escapeHtml(r.name)+'</td><td>'+escapeHtml(r.phone)+'</td><td>'+escapeHtml(r.email)+'</td></tr>').join('')+'</tbody></table>';
-  };
 
   /* Contact: show the business card image + current owner details in BOTH modes. */
   function renderOwnerContact(){
@@ -4367,7 +4348,7 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
     const lines=['New Skill Order recived from','Customer Name: '+(o.customer||''),'Skill Name: '+(o.skill||o.skillName||''),'Skill Price: '+(o.price||''),'Order Date: '+orderDate,'Customer Phone: '+(o.customerPhone||''),'Customer Gmail ID: '+(o.customerEmail||''),'Customer Address: '+(o.customerAddress||'')];
     const subject='New Skill Order — '+(o.skill||o.skillName||'Service');
     const url=api(EMAIL_API_KEY,'/api/send-owner-email');let sent=false;
-    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId:SITE_ID,event:'new_skill_order',state:state(),sentAt:new Date().toISOString(),order:o});
+    if(url&&owner.email)sent=await post(url,{to:owner.email,subject,body:lines.join('\n'),kind:'skill_order',siteId:SITE_ID,sentAt:new Date().toISOString(),order:o});
     if(!sent&&owner.email)location.href='mailto:'+encodeURIComponent(owner.email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\n'));
     await window.hhPushSiteState('new_skill_order');
     if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(sent?'Order sent to owner business Gmail':'Order saved; owner email prepared');
@@ -4430,13 +4411,352 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
       }
       if(Array.isArray(st.skills) && Array.isArray(window.skills)){window.skills.length=0;st.skills.forEach(x=>window.skills.push(x));if(typeof window.updateSlider==='function')window.updateSlider();}
       if(Array.isArray(st.orders) && Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));if(typeof window.renderOrders==='function')window.renderOrders();}
-      if(typeof window.hhRefreshNewCustomers==='function')window.hhRefreshNewCustomers();
-      /* Remote customer/order data is now also written to the owner's connected Website Information.txt. */
-      if(typeof window.hhSaveWebsiteInformation==='function')window.hhSaveWebsiteInformation();
       if(typeof window.hhRefreshContact==='function')window.hhRefreshContact();
     }catch(err){}
   });
 })();
+</script>
+
+<style id="hh-v10-cross-device-upgrade">
+  #demoNav{display:flex!important;}
+  #hhDeleteAccountNavItem{display:none;}
+  body:not(.owner-mode) #hhDeleteAccountNavItem{display:none;}
+  .hh-demo-item{border-radius:12px;}
+</style>
+<script id="hh-v10-cross-device-upgrade-script">
+(function(){
+  'use strict';
+  if(window.__HH_CROSS_DEVICE_V10__) return;
+  window.__HH_CROSS_DEVICE_V10__=true;
+
+  const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
+  const CUSTOMER_KEY='hh_customer_accounts_v4';
+  const SESSION_KEY='hh_customer_session_v4';
+  const ORDERS_KEY='hh_orders_v3';
+  const SKILLS_KEY='hh_skills_v3';
+  const INFO_KEY='hh_website_information_v9';
+  const CONSENT_KEY='hh_cookie_consent_v4';
+  const BACKEND_META='hh-backend-base';
+  const EMAIL_KEY='hh_owner_email_api_url';
+  const SYNC_KEY='hh_site_sync_api_url';
+
+  const $=id=>document.getElementById(id);
+  const safe=(v,f)=>{try{const x=JSON.parse(v);return x??f}catch(e){return f}};
+  const norm=v=>String(v??'').trim().toLowerCase();
+  const base=()=>{const m=document.querySelector('meta[name="'+BACKEND_META+'"]');return String(localStorage.getItem(SYNC_KEY)||localStorage.getItem(EMAIL_KEY)||m?.content||window.HH_BACKEND_BASE||'').trim().replace(/\/$/,'');};
+  const api=p=>{const b=base();return b?b+p:p;};
+  const users=()=>safe(localStorage.getItem(CUSTOMER_KEY),[]);
+  const orders=()=>safe(localStorage.getItem(ORDERS_KEY),[]);
+  const skills=()=>safe(localStorage.getItem(SKILLS_KEY),[]);
+  const currentCustomer=()=>safe(sessionStorage.getItem(SESSION_KEY)||localStorage.getItem(SESSION_KEY),null);
+  const owner=()=>safe(localStorage.getItem('hh_owner_details_v5'),{});
+
+  function localInfo(){
+    const x=safe(localStorage.getItem(INFO_KEY),{});
+    x.version=x.version||1;
+    x.ownerMode=x.ownerMode||{};
+    x.customerMode=x.customerMode||{};
+    x.customerMode.customers=Array.isArray(x.customerMode.customers)?x.customerMode.customers:[];
+    x.customerMode.signupHistory=Array.isArray(x.customerMode.signupHistory)?x.customerMode.signupHistory:[];
+    x.customerMode.loginHistory=Array.isArray(x.customerMode.loginHistory)?x.customerMode.loginHistory:[];
+    x.customerMode.orders=Array.isArray(x.customerMode.orders)?x.customerMode.orders:[];
+    x.customerMode.workSamples=Array.isArray(x.customerMode.workSamples)?x.customerMode.workSamples:[];
+    return x;
+  }
+  function customerSnap(u){return u?{company:u.company||'',name:u.name||'',phone:u.phone||'',email:u.email||'',address:u.address||'',createdAt:u.createdAt||Date.now()}:null;}
+  function syncLocalInfo(remote){
+    const x=localInfo();
+    if(remote?.owner)x.ownerMode.currentOwner=remote.owner;
+    if(Array.isArray(remote?.customers))x.customerMode.customers=remote.customers;
+    if(Array.isArray(remote?.orders))x.customerMode.orders=remote.orders;
+    if(Array.isArray(remote?.workSamples))x.customerMode.workSamples=remote.workSamples;
+    x.updatedAt=new Date().toISOString();
+    localStorage.setItem(INFO_KEY,JSON.stringify(x));
+    // Existing Website Information module writes to the owner's selected
+    // Documents/Website Info folder automatically when it has permission.
+    try{window.hhSaveWebsiteInformation?.();}catch(e){}
+    localStorage.setItem(INFO_KEY,JSON.stringify({...localInfo(),customerMode:{...localInfo().customerMode,customers:Array.isArray(remote?.customers)?remote.customers:localInfo().customerMode.customers,orders:Array.isArray(remote?.orders)?remote.orders:localInfo().customerMode.orders,workSamples:Array.isArray(remote?.workSamples)?remote.workSamples:localInfo().customerMode.workSamples}}));
+  }
+
+  async function post(url,payload){
+    if(!base())return null;
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify(payload),cache:'no-store'});
+      const text=await r.text();let data={};try{data=JSON.parse(text)}catch(e){}
+      return {ok:r.ok,data};
+    }catch(e){return null;}
+  }
+
+  function state(){
+    return {
+      siteId:SITE_ID,
+      updatedAt:new Date().toISOString(),
+      owner:owner(),
+      ownerPassword:localStorage.getItem('hh_owner_search_password')||'',
+      customers:users(),
+      orders:orders(),
+      skills:skills(),
+      workSamples:safe(localStorage.getItem('hh_remote_work_samples_v1'),[]),
+      websiteInformation:localInfo()
+    };
+  }
+
+  // Replace the older V9 sender so order/customer persistence happens on the
+  // server together with the owner Gmail notification.
+  window.hhPushSiteState=async function(eventName,extra={}){
+    const result=await post(api('/api/site-sync'),{siteId:SITE_ID,event:eventName||'update',state:state(),order:extra.order||null});
+    return !!result?.ok;
+  };
+
+  function orderCustomerFromLatest(){
+    const a=orders();
+    const o=a.length?a[a.length-1]:null;
+    const u=currentCustomer();
+    return {o,u};
+  }
+
+  window.hhSendOrderToOwner=async function(){
+    const {o,u}=orderCustomerFromLatest();
+    if(!o)return false;
+    const d=owner();
+    const customer=u||{name:o.customer||'',phone:o.customerPhone||'',email:o.customerEmail||'',address:o.customerAddress||'',company:o.customerCompany||''};
+    const customerEmail=String(customer.email||o.customerEmail||'').trim();
+    const ownerEmail=String(d.email||'').trim();
+    const dt=new Date(o.createdAt||Date.now());
+    const orderDate=dt.toLocaleString('en-IN',{year:'numeric',month:'long',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const lines=[
+      'New Skill Order received from',
+      'Customer Name: '+(o.customer||customer.name||''),
+      'Skill Name: '+(o.skill||o.skillName||''),
+      'Skill Price: '+(o.price||o.orderPrice||''),
+      'Order Date: '+orderDate,
+      'Customer Phone: '+(o.customerPhone||customer.phone||''),
+      'Customer Gmail ID: '+customerEmail,
+      'Customer Address: '+(o.customerAddress||customer.address||'')
+    ];
+    const subject='New Skill Order — '+(o.skill||o.skillName||'Service');
+
+    // The backend saves the customer and order before sending the email.
+    let sent=false;
+    if(ownerEmail){
+      const r=await post(api('/api/send-owner-email'),{
+        to:ownerEmail,
+        subject,
+        body:lines.join('\n'),
+        kind:'skill_order',
+        siteId:SITE_ID,
+        order:o,
+        customer,
+        state:state(),
+        sentAt:new Date().toISOString()
+      });
+      sent=!!r?.ok;
+    }
+    // Mailto fallback still fills the owner's To field. Browsers/Gmail do not
+    // allow a website to force an arbitrary account into the From field.
+    if(!sent&&ownerEmail){
+      const mail='mailto:'+encodeURIComponent(ownerEmail)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\n'));
+      window.location.href=mail;
+    }
+    await window.hhPushSiteState('new_skill_order',{order:o});
+    setTimeout(()=>window.hhPullSiteState?.(),350);
+    if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(sent?'Order sent to owner business Gmail':'Order saved; owner email prepared');
+    return sent;
+  };
+
+  function applyRemote(st){
+    if(!st||st.siteId!==SITE_ID)return false;
+    try{
+      if(st.owner){
+        localStorage.setItem('hh_owner_details_v5',JSON.stringify(st.owner));
+        document.querySelectorAll('.hh-brand-main').forEach(x=>x.textContent=st.owner.company||'MULTISKILL TECHNICIAN');
+        document.querySelectorAll('.hh-brand-owner').forEach(x=>x.textContent=Array.isArray(st.owner.names)?st.owner.names.join(' & '):(st.owner.names||'Hemant Hardik'));
+        if(st.owner.logo){$('logoImg')?.setAttribute('src',st.owner.logo);document.querySelectorAll('.logo img').forEach(x=>x.src=st.owner.logo);}
+        if(st.owner.card){$('cardImage1')?.setAttribute('src',st.owner.card);$('v4CardImage')?.setAttribute('src',st.owner.card);}
+      }
+      if(Array.isArray(st.customers))localStorage.setItem(CUSTOMER_KEY,JSON.stringify(st.customers));
+      if(Array.isArray(st.orders)){
+        localStorage.setItem(ORDERS_KEY,JSON.stringify(st.orders));
+        if(Array.isArray(window.orders)){window.orders.length=0;st.orders.forEach(x=>window.orders.push(x));}
+      }
+      if(Array.isArray(st.skills)){
+        localStorage.setItem(SKILLS_KEY,JSON.stringify(st.skills));
+        if(Array.isArray(window.skills)){window.skills.length=0;st.skills.forEach(x=>window.skills.push(x));}
+      }
+      if(Array.isArray(st.workSamples))localStorage.setItem('hh_remote_work_samples_v1',JSON.stringify(st.workSamples));
+      if(st.websiteInformation)localStorage.setItem(INFO_KEY,JSON.stringify(st.websiteInformation));
+      if(st.ownerPassword)localStorage.setItem('hh_owner_search_password',String(st.ownerPassword));
+      syncLocalInfo({owner:st.owner,customers:st.customers,orders:st.orders,workSamples:st.workSamples});
+      document.dispatchEvent(new CustomEvent('hhRemoteStateApplied',{detail:st}));
+      if(typeof window.updateSlider==='function'&&Array.isArray(st.skills))window.updateSlider();
+      if(document.body.classList.contains('owner-mode')){
+        setTimeout(()=>{if(typeof window.showV7Orders==='function'&&$('ordersSection')?.classList.contains('active'))window.showV7Orders(true);refreshNewCustomers();},30);
+      }
+      refreshWorkSampleNotice();
+      return true;
+    }catch(e){return false;}
+  }
+
+  async function pull(){
+    if(!base())return false;
+    try{
+      const r=await fetch(api('/api/site-sync?siteId='+encodeURIComponent(SITE_ID)),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
+      if(!r.ok)return false;
+      const j=await r.json();return applyRemote(j.state);
+    }catch(e){return false;}
+  }
+  window.hhPullSiteState=pull;
+
+  // Polling makes updates appear on another phone without requiring a manual
+  // reload. The interval is intentionally modest for the free backend tier.
+  let pollTimer=null;
+  function startPolling(){clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==='visible')pull()},10000);pull();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startPolling,{once:true});else startPolling();
+  window.addEventListener('focus',()=>pull(),{passive:true});
+  window.addEventListener('online',()=>pull(),{passive:true});
+
+  // Push successful customer signup/login events.
+  document.addEventListener('click',e=>{
+    const id=e.target.closest('#v4SignupCreate,#v4LoginEnter')?.id;
+    if(!id)return;
+    setTimeout(()=>window.hhPushSiteState(id==='v4SignupCreate'?'customer_signup':'customer_login'),350);
+  },true);
+
+  // Owner changes and skill creation.
+  document.addEventListener('click',e=>{
+    const t=e.target.closest('#v5OwnerDetailsComplete,#v5ChangeOwnerSubmit,#v4AddSkillBtn');
+    if(!t)return;
+    setTimeout(()=>window.hhPushSiteState(t.id==='v4AddSkillBtn'?'skill_updated':t.id==='v5ChangeOwnerSubmit'?'owner_changed':'owner_details_updated'),700);
+  },true);
+
+  // Owner can change an order from pending -> working -> completed.
+  document.addEventListener('change',e=>{
+    const sel=e.target.closest('.v7-status,.v4-status,.hh-status-select');
+    if(!sel||!document.body.classList.contains('owner-mode'))return;
+    setTimeout(()=>{
+      const id=sel.dataset.id;
+      const a=orders();
+      const o=a.find(x=>String(x.id)===String(id));
+      if(o){o.status=sel.value;localStorage.setItem(ORDERS_KEY,JSON.stringify(a));window.hhPushSiteState('order_status_updated',{order:o});}
+    },80);
+  },true);
+
+  // -------- Work Samples: owner upload -> backend -> every device --------
+  function fileToDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file);});}
+  async function uploadWorkSample(file){
+    if(!file||file.size>20*1024*1024){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Work sample must be 20 MB or smaller');return false;}
+    if(!base())return false;
+    try{
+      const data=await fileToDataUrl(file);
+      const item={id:'WS-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),name:file.name,type:file.type||'application/octet-stream',size:file.size,created:Date.now()};
+      const r=await post(api('/api/work-samples'),{siteId:SITE_ID,...item,data});
+      return !!r?.ok;
+    }catch(e){return false;}
+  }
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('#saveDemoFilesBtn');
+    if(!b||!document.body.classList.contains('owner-mode'))return;
+    const input=$('demoFileInput');const files=input?[...input.files]:[];
+    if(!files.length)return;
+    // Let the existing local IndexedDB save finish first, then upload the same
+    // selected files to the shared backend.
+    setTimeout(async()=>{
+      let ok=0;
+      for(const f of files)if(await uploadWorkSample(f))ok++;
+      if(ok){await pull();if(typeof window.hhPullWorkSamples==='function')window.hhPullWorkSamples();}
+      if(ok<files.length&&typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(ok+' work sample(s) synced to other devices');
+    },450);
+  },true);
+
+  async function remoteSamples(){
+    if(!base())return [];
+    try{const r=await fetch(api('/api/work-samples?siteId='+encodeURIComponent(SITE_ID)),{cache:'no-store'});if(!r.ok)return [];const j=await r.json();const a=Array.isArray(j.workSamples)?j.workSamples:[];localStorage.setItem('hh_remote_work_samples_v1',JSON.stringify(a));return a;}catch(e){return [];}
+  }
+  window.hhPullWorkSamples=remoteSamples;
+  function remoteOpen(item){
+    const modal=$('demoViewerModal'),body=$('demoViewerBody'),title=$('demoViewerTitle');
+    if(!modal||!body)return;
+    title.textContent=item.name||'Work Sample';body.innerHTML='';
+    const u=api('/api/work-samples/file/'+encodeURIComponent(item.id));
+    let el;
+    if(/^video\//.test(item.type||'')){el=document.createElement('video');el.controls=true;el.playsInline=true;el.src=u;}
+    else if(/^audio\//.test(item.type||'')){el=document.createElement('audio');el.controls=true;el.src=u;}
+    else if(/^image\//.test(item.type||'')){el=document.createElement('img');el.alt=item.name||'Work Sample';el.src=u;}
+    else if(item.type==='application/pdf'){el=document.createElement('iframe');el.src=u;el.title=item.name||'PDF';}
+    else {el=document.createElement('iframe');el.src=u;el.title=item.name||'Work Sample';el.setAttribute('sandbox','allow-scripts allow-forms allow-modals');}
+    body.appendChild(el);modal.classList.add('active');
+  }
+  function renderRemoteSamples(){
+    const list=$('demoList');if(!list)return;
+    const arr=safe(localStorage.getItem('hh_remote_work_samples_v1'),[]);
+    if(!arr.length)return;
+    const marker='[data-hh-remote-samples]';
+    list.querySelector(marker)?.remove();
+    const box=document.createElement('div');box.setAttribute('data-hh-remote-samples','');box.style.cssText='margin-top:12px;';
+    const head=document.createElement('div');head.className='hh-muted';head.textContent='Shared Work Samples';box.appendChild(head);
+    arr.slice().sort((a,b)=>(b.created||0)-(a.created||0)).forEach(item=>{
+      const row=document.createElement('div');row.className='hh-demo-item';
+      const name=document.createElement('div');name.className='hh-demo-name';name.textContent=item.name+' · '+formatBytes(item.size);
+      const actions=document.createElement('div');actions.className='hh-demo-actions';
+      const open=document.createElement('button');open.type='button';open.textContent='Open';open.onclick=()=>remoteOpen(item);actions.appendChild(open);
+      const dl=document.createElement('button');dl.type='button';dl.textContent='Download';dl.onclick=()=>{const a=document.createElement('a');a.href=api('/api/work-samples/file/'+encodeURIComponent(item.id));a.download=item.name||'work-sample';document.body.appendChild(a);a.click();a.remove();};actions.appendChild(dl);
+      if(document.body.classList.contains('owner-mode')){
+        const del=document.createElement('button');del.type='button';del.textContent='Delete Shared';del.onclick=async()=>{if(!confirm('Delete this shared work sample?'))return;try{const r=await fetch(api('/api/work-samples/'+encodeURIComponent(item.id)),{method:'DELETE'});if(r.ok){await remoteSamples();renderRemoteSamples();showWelcomeMessage('Shared work sample deleted');}}catch(e){}};actions.appendChild(del);
+      }
+      row.append(name,actions);box.appendChild(row);
+    });
+    list.appendChild(box);
+  }
+  function formatBytes(n){n=Number(n||0);return n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';}
+  function refreshWorkSampleNotice(){
+    if($('demoList')&&$('demoModal')?.classList.contains('active'))renderRemoteSamples();
+  }
+  document.addEventListener('click',e=>{
+    if(e.target.closest('#demoNav,#ownerDemoFiles'))setTimeout(async()=>{await remoteSamples();renderRemoteSamples();},800);
+  },true);
+
+  // Customer-mode Work Samples is explicitly public; owner menu remains owner-only.
+  function modeUI(){
+    const ownerMode=document.body.classList.contains('owner-mode');
+    const demo=$('demoNav')?.closest('.nav-item');if(demo)demo.style.display='';
+    const del=$('hhDeleteAccountNavItem');
+    if(del)del.style.display=ownerMode?'none':(currentCustomer()?'':'none');
+  }
+  new MutationObserver(modeUI).observe(document.body,{attributes:true,attributeFilter:['class']});
+
+  // -------- Customer-only Delete Account (local device only) --------
+  function installDeleteAccount(){
+    if($('hhDeleteAccountNavItem'))return;
+    const nav=$('navMenu');if(!nav)return;
+    const li=document.createElement('li');li.className='nav-item';li.id='hhDeleteAccountNavItem';li.style.display='none';
+    const b=document.createElement('button');b.type='button';b.className='nav-link';b.textContent=' Delete Account';
+    b.onclick=()=>{
+      const u=currentCustomer();
+      if(!u){if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage('Please log in to delete your customer account');return;}
+      if(!confirm('Delete this customer account and its saved data from this device only? The owner\'s copy will remain saved.'))return;
+      const matches=x=>norm(x.email)===norm(u.email)||norm(x.phone)===norm(u.phone)||norm(x.company)===norm(u.company);
+      localStorage.setItem(CUSTOMER_KEY,JSON.stringify(users().filter(x=>!matches(x))));
+      localStorage.setItem(ORDERS_KEY,JSON.stringify(orders().filter(x=>!(norm(x.customerEmail||x.email)===norm(u.email)||norm(x.customerPhone||x.phone)===norm(u.phone)||norm(x.customer)===norm(u.name)||norm(x.customer)===norm(u.company)) )));
+      sessionStorage.removeItem(SESSION_KEY);localStorage.removeItem(SESSION_KEY);localStorage.removeItem('hh_customer_order_details_v8');
+      const x=localInfo();x.customerMode.customers=x.customerMode.customers.filter(c=>!matches(c));x.customerMode.orders=x.customerMode.orders.filter(o=>!(norm(o.customerEmail||o.email)===norm(u.email)||norm(o.customerPhone||o.phone)===norm(u.phone)));x.customerMode.signupHistory=x.customerMode.signupHistory.filter(c=>!matches(c));x.customerMode.loginHistory=x.customerMode.loginHistory.filter(c=>!matches(c));localStorage.setItem(INFO_KEY,JSON.stringify(x));
+      modeUI();
+      if(typeof window.showWelcomeMessage==='function')window.showWelcomeMessage('Customer account deleted from this device. Owner records were not deleted.');
+    };
+    li.appendChild(b);
+    const anchor=$('customerSignupNavItem')||$('loginToggle')?.closest('.nav-item');
+    if(anchor?.parentNode)anchor.parentNode.insertBefore(li,anchor.nextSibling);else nav.appendChild(li);
+  }
+  function refreshNewCustomers(){
+    const box=$('hhNewCustomersTable');if(!box)return;
+    const a=users();
+    if(!a.length){box.innerHTML='<div class="hh-excel-empty">No customer accounts have been created yet.</div>';return;}
+    const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    box.innerHTML='<table class="hh-excel-table"><thead><tr><th>Sr No</th><th>Customer Name</th><th>Customer Phone</th><th>Customer Gmail ID</th></tr></thead><tbody>'+a.map((u,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(u.name)+'</td><td>'+esc(u.phone)+'</td><td>'+esc(u.email)+'</td></tr>').join('')+'</tbody></table>';
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installDeleteAccount();modeUI();}, {once:true});else{installDeleteAccount();modeUI();}
+})();
+
 </script>
 </body>
 </html>
