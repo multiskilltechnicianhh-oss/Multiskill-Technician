@@ -73,8 +73,9 @@ function writeText(all){
     blocks.push(JSON.stringify(state.customers||[],null,2));
     blocks.push('Orders:');
     blocks.push(JSON.stringify(state.orders||[],null,2));
-    blocks.push('Skills:');
+    blocks.push('Skill Frames (saved persistently):');
     blocks.push(JSON.stringify(state.skills||[],null,2));
+    blocks.push(`Skill Frames Initialized: ${state.skillsInitialized===true?'Yes':'No'}`);
     blocks.push('Work Samples:');
     blocks.push(JSON.stringify(state.workSamples||[],null,2));
     blocks.push('');
@@ -85,6 +86,11 @@ function mergeState(oldState, incoming, event){
   const old=oldState||{};
   const next={...old,siteId:incoming.siteId,updatedAt:new Date().toISOString()};
   const ev=String(event||'update');
+  // A non-empty legacy skill list is already initialized. An explicit skill
+  // update (including an empty list) is authoritative and must be preserved.
+  const legacySkillsPresent=Array.isArray(old.skills) && old.skills.length>0;
+  const skillsInitialized=old.skillsInitialized===true || legacySkillsPresent;
+  next.skillsInitialized=skillsInitialized;
 
   // Owner information is authoritative when it is explicitly changed.
   if(['owner_details_updated','owner_changed','owner_password_changed'].includes(ev)){
@@ -94,10 +100,12 @@ function mergeState(oldState, incoming, event){
   // Skill updates are authoritative: the owner's current list must be allowed
   // to remove a skill as well as add one. Using a union here would resurrect
   // deleted skill frames on the next device pull.
-  if(Array.isArray(incoming.skills) && ev==='skill_updated'){
+  if(Array.isArray(incoming.skills) && (ev==='skill_updated' || ev==='skill_bootstrap')){
     next.skills=uniqBy(incoming.skills,x=>x.id||String(x.name||'').trim().toLowerCase());
+    next.skillsInitialized=true;
   } else if(Array.isArray(incoming.skills) && ['owner_details_updated','owner_changed','local_update','update'].includes(ev) && !Array.isArray(old.skills)){
     next.skills=mergeSkills(old.skills,incoming.skills);
+    next.skillsInitialized=next.skills.length>0;
   }
   if(Array.isArray(incoming.customers)) next.customers=mergeCustomers(old.customers,incoming.customers);
   if(Array.isArray(incoming.orders)) next.orders=mergeOrders(old.orders,incoming.orders);
@@ -192,7 +200,12 @@ app.get('/api/site-sync',(req,res)=>{
   const siteId=String(req.query.siteId||'');
   if(!siteId)return res.status(400).json({ok:false,error:'Missing siteId'});
   const all=load();
-  const state=all[siteId]||{siteId,customers:[],orders:[],skills:[],workSamples:[]};
+  const stored=all[siteId];
+  const state=stored||{siteId,customers:[],orders:[],workSamples:[],skillsInitialized:false};
+  // Do not return an empty skills array until the owner has explicitly
+  // initialized the shared skill list; older frontend builds otherwise treat
+  // the empty array as an instruction to erase their built-in skill frames.
+  if(state.skillsInitialized!==true && (!Array.isArray(state.skills)||state.skills.length===0)) delete state.skills;
   const samples=loadSamples()[siteId]||[];
   state.workSamples=mergeWorkSamples(state.workSamples,samples);
   res.json({ok:true,siteId,state});

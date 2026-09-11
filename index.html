@@ -4060,6 +4060,9 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
       line('Owner Phone Number',ownerNow.phone||''),
       line('Owner Gmail ID',ownerNow.email||''),
       '',
+      '--- SKILL FRAMES ---',
+      block(x.skills),
+      '',
       '--- OWNER DETAILS TAB DETAILS ---',
       block(owner.ownerDetailsHistory),
       '',
@@ -4954,5 +4957,181 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
   if(document.readyState!=='loading'){fixStoredSkillPrices();installDeleteAccountV11();renderDescription();}
 })();
 </script>
+<script id="hh-v12-persistence-and-order-layout-fix">
+(function(){
+  'use strict';
+  const $=id=>document.getElementById(id);
+  const safe=(v,f)=>{try{const x=JSON.parse(v);return x??f}catch(e){return f}};
+  const norm=v=>String(v??'').trim().toLowerCase();
+  const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
+  const SKILLS_KEY='hh_skills_v3';
+  const INFO_KEY='hh_website_information_v9';
+  const SYNC_KEY='hh_site_sync_api_url';
+  const EMAIL_KEY='hh_owner_email_api_url';
+  function backend(){
+    const m=document.querySelector('meta[name="hh-backend-base"]');
+    return String(localStorage.getItem(SYNC_KEY)||localStorage.getItem(EMAIL_KEY)||m?.content||window.HH_BACKEND_BASE||'').trim().replace(/\/$/,'');
+  }
+  function api(p){const b=backend();return b?b+p:p;}
+  function localSkills(){const a=safe(localStorage.getItem(SKILLS_KEY),[]);return Array.isArray(a)?a:[];}
+  function localInfo(){const x=safe(localStorage.getItem(INFO_KEY),{});x.ownerMode=x.ownerMode||{};x.customerMode=x.customerMode||{};x.skills=Array.isArray(x.skills)?x.skills:[];return x;}
+
+  // ---- Prevent skill frames from disappearing on a fresh load. ----
+  // An uninitialized backend must never overwrite the site's built-in/local
+  // skill list with an empty array. Once the owner explicitly saves a skill
+  // update (including an intentional empty list), the backend becomes
+  // authoritative and an empty list is preserved.
+  async function bootstrapSkillsIfNeeded(){
+    if(!backend()||!document.body.classList.contains('owner-mode'))return;
+    try{
+      const r=await fetch(api('/api/site-sync?siteId='+encodeURIComponent(SITE_ID)),{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
+      if(!r.ok)return;
+      const j=await r.json(),st=j.state||{};
+      if(st.skillsInitialized===true)return;
+      const a=localSkills();
+      if(!a.length)return;
+      await fetch(api('/api/site-sync'),{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},cache:'no-store',body:JSON.stringify({siteId:SITE_ID,event:'skill_bootstrap',state:{siteId:SITE_ID,skills:a}})});
+    }catch(e){}
+  }
+
+  // ---- Keep all skill-frame data in Website Information.txt source data. ----
+  function saveSkillsInWebsiteInformation(){
+    try{
+      const x=localInfo();
+      x.skills=localSkills();
+      x.updatedAt=new Date().toISOString();
+      localStorage.setItem(INFO_KEY,JSON.stringify(x));
+      // Existing Website Information module turns this structured record into
+      // the physical Documents/Website Info/Website Information.txt file.
+      window.hhSaveWebsiteInformation?.();
+    }catch(e){}
+  }
+  window.hhSaveSkillsInWebsiteInformation=saveSkillsInWebsiteInformation;
+
+  // ---- Reliable skill price display: collapse repeated ranges such as
+  // "20-40-20-40" and object forms such as {min:"20-40",max:"20-40"}. ----
+  function clean(v){return String(v??'').replace(/^Rs\.?\s*/i,'').replace(/₹/g,'').trim();}
+  function priceText(skill){
+    const p=skill?.price;
+    let v='';
+    if(p&&typeof p==='object'){
+      let a=clean(p.min),b=clean(p.max);
+      if(a&&b){
+        const ap=a.split(/\s*[-–]\s*/).filter(Boolean),bp=b.split(/\s*[-–]\s*/).filter(Boolean);
+        if(ap.length===2 && bp.length===2 && ap[0]===bp[0] && ap[1]===bp[1]) v=ap[0]+' - '+ap[1];
+        else v=(a===b?a:a+' - '+b);
+      }else v=a||b;
+    }else v=clean(p);
+    let parts=v.split(/\s*[-–]\s*/).map(x=>x.trim()).filter(Boolean);
+    if(parts.length>=4 && parts.length%2===0){
+      const half=parts.length/2;
+      if(parts.slice(0,half).join('|')===parts.slice(half).join('|')) parts=parts.slice(0,half);
+    }
+    return parts.join(' - ')||'Contact for price';
+  }
+  function repairAllSkillPrices(){
+    const a=localSkills();let changed=false;
+    a.forEach(s=>{
+      const before=JSON.stringify(s.price);
+      const p=s.price;
+      if(p&&typeof p==='object'){
+        const a1=clean(p.min),b1=clean(p.max);
+        const ap=a1.split(/\s*[-–]\s*/).filter(Boolean),bp=b1.split(/\s*[-–]\s*/).filter(Boolean);
+        if(ap.length===2&&bp.length===2&&ap[0]===bp[0]&&ap[1]===bp[1]) s.price={min:ap[0],max:ap[1]};
+      }else if(typeof p==='string'){
+        const parts=clean(p).split(/\s*[-–]\s*/).map(x=>x.trim()).filter(Boolean);
+        if(parts.length>=4&&parts.length%2===0){const h=parts.length/2;if(parts.slice(0,h).join('|')===parts.slice(h).join('|'))s.price=parts.slice(0,h).join(' - ');}
+      }
+      if(before!==JSON.stringify(s.price))changed=true;
+    });
+    if(changed){
+      localStorage.setItem(SKILLS_KEY,JSON.stringify(a));
+      if(Array.isArray(window.skills)){window.skills.length=0;a.forEach(x=>window.skills.push(x));}
+      if(typeof window.updateSlider==='function')window.updateSlider(0,true);
+      saveSkillsInWebsiteInformation();
+      window.hhPushSiteState?.('skill_updated');
+    }
+  }
+  window.hhV12PriceText=priceText;
+
+  // Override the detail modal's price text with the normalized value.
+  document.addEventListener('click',e=>{
+    const card=e.target.closest('#slider .card');
+    if(!card)return;
+    setTimeout(()=>{
+      const name=String($('modalTitle')?.textContent||'').trim();
+      const skill=localSkills().find(x=>String(x.name||'').trim()===name || String(x.id)===String(card.dataset.skillId));
+      if(skill&&$('modalPrice'))$('modalPrice').textContent='Rs '+priceText(skill);
+    },0);
+  },true);
+
+  // ---- Reliable owner Remove This Skill ----
+  // Intercept the existing button before older handlers can act on a stale
+  // skill reference. The current modal title identifies the exact displayed
+  // frame; the card id is preferred when available.
+  document.addEventListener('click',async e=>{
+    const b=e.target.closest('#removeThisSkillBtn');
+    if(!b||!document.body.classList.contains('owner-mode'))return;
+    e.preventDefault();e.stopImmediatePropagation();
+    const title=String($('modalTitle')?.textContent||'').trim();
+    const a=localSkills();
+    const idx=a.findIndex(x=>String(x.name||'').trim()===title);
+    if(idx<0){window.showWelcomeMessage?.('Selected skill was not found');return;}
+    const removed=a[idx];
+    a.splice(idx,1);
+    // Renumber remaining frames cleanly.
+    a.forEach((x,i)=>x.number=String(i+1).padStart(2,'0'));
+    localStorage.setItem(SKILLS_KEY,JSON.stringify(a));
+    if(Array.isArray(window.skills)){window.skills.length=0;a.forEach(x=>window.skills.push(x));}
+    $('detailModal')?.classList.remove('active');
+    if(typeof window.updateSlider==='function')window.updateSlider(0,true);
+    saveSkillsInWebsiteInformation();
+    if(typeof window.hhPushSiteState==='function')await window.hhPushSiteState('skill_updated');
+    window.showWelcomeMessage?.((removed.name||'Skill')+' removed successfully');
+  },true);
+
+  // ---- Save skills whenever the owner adds/updates a frame. ----
+  document.addEventListener('click',e=>{
+    const t=e.target.closest('#v4AddSkillBtn,#addSkillSubmit');
+    if(!t)return;
+    setTimeout(()=>{repairAllSkillPrices();saveSkillsInWebsiteInformation();window.hhPushSiteState?.('skill_updated');},250);
+  },true);
+
+  // ---- Move Order details ABOVE the complete website description. ----
+  function moveOrdersAboveDescription(){
+    const orders=$('ordersSection'),desc=$('hhWebsiteDescription');
+    if(!orders||!desc||!desc.parentNode)return;
+    if(orders.parentNode===desc.parentNode && orders.nextElementSibling!==desc){
+      desc.parentNode.insertBefore(orders,desc);
+    }else if(orders.parentNode!==desc.parentNode){
+      desc.parentNode.insertBefore(orders,desc);
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',moveOrdersAboveDescription,{once:true});else moveOrdersAboveDescription();
+  window.addEventListener('load',moveOrdersAboveDescription);
+
+  // On owner mode, keep the text file's skill section current. On a customer
+  // device this only updates local website information and never deletes the
+  // owner's backend records.
+  document.addEventListener('hhRemoteStateApplied',e=>{
+    const st=e.detail||{};
+    if(Array.isArray(st.skills))setTimeout(()=>{repairAllSkillPrices();if(document.body.classList.contains('owner-mode'))saveSkillsInWebsiteInformation();},80);
+  },true);
+  const mo=new MutationObserver(()=>{
+    moveOrdersAboveDescription();
+    if(document.body.classList.contains('owner-mode')){repairAllSkillPrices();saveSkillsInWebsiteInformation();bootstrapSkillsIfNeeded();}
+  });
+  mo.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{repairAllSkillPrices();saveSkillsInWebsiteInformation();bootstrapSkillsIfNeeded();},{once:true});
+  else{repairAllSkillPrices();saveSkillsInWebsiteInformation();bootstrapSkillsIfNeeded();}
+})();
+</script>
+<style id="hh-v12-order-layout-style">
+/* The Order details section is intentionally positioned above the complete
+   website description. JS also enforces the DOM order so existing navigation
+   behavior continues to work. */
+#ordersSection{margin-bottom:44px;}
+</style>
+
 </body>
 </html>
