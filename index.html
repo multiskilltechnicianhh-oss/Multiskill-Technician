@@ -4075,19 +4075,19 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
     return false;
   }
   async function autoWriteDeviceFile(){if(websiteInfoDirHandle)await writeWebsiteInformationFile();}
-  async function downloadOwnerInformationTxt(){
-    const u=base();
-    if(u){
-      try{const r=await fetch(api('/api/owner-information.txt?siteId='+encodeURIComponent(SITE_ID)),{cache:'no-store'});if(r.ok){const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;}}catch(e){}
-    }
-    const blob=new Blob([ownerInformationText()],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;
-  }
-  window.hhDownloadOwnerInformationTxt=downloadOwnerInformationTxt;
-  
   // Reconnect is required after browser/site data is cleared; the physical TXT backup itself remains in Documents.
   window.hhWebsiteInfoStorageNote=function(){return 'Website Information.txt is the durable backup. Browser storage can be deleted by Chrome; the text file is not deleted by clearing browser data. Reconnect the Documents/Website Info folder to continue automatic updates.';};
   window.hhChooseWebsiteInfoFolder=chooseWebsiteInfoFolder;
   window.hhDownloadWebsiteInformation=downloadWebsiteInformation;
+  window.hhDownloadOwnerInformationTxt=async function(){
+    try{
+      if(base()){
+        const r=await fetch(api('/api/owner-information.txt'),{cache:'no-store'});
+        if(r.ok){const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;}
+      }
+    }catch(e){}
+    const blob=new Blob([ownerInformationText()],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;
+  };
   window.hhShareWebsiteInformation=shareWebsiteInformation;
   restoreFolderHandle().then(ok=>{if(ok&&document.body.classList.contains('owner-mode'))autoWriteDeviceFile();});
 
@@ -4678,20 +4678,13 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
   },true);
 
   // -------- Work Samples: owner upload -> backend -> every device --------
-  function guessWorkSampleMimeClient(name,type){
-    const t=String(type||'').trim();
-    if(t&&t!=='application/octet-stream')return t;
-    const ext=String(name||'').toLowerCase().split('.').pop();
-    const map={mp4:'video/mp4',webm:'video/webm',m4v:'video/x-m4v',mov:'video/quicktime',avi:'video/x-msvideo',mkv:'video/x-matroska',ogv:'video/ogg',ogg:'video/ogg','3gp':'video/3gpp',mpeg:'video/mpeg',mpg:'video/mpeg',mpe:'video/mpeg',mts:'video/mp2t',m2ts:'video/mp2t',ts:'video/mp2t'};
-    return map[ext]||t||'application/octet-stream';
-  }
   function fileToDataUrl(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file);});}
   async function uploadWorkSample(file){
     if(!file||file.size>20*1024*1024){if(typeof showWelcomeMessage==='function')showWelcomeMessage('Work sample must be 20 MB or smaller');return false;}
     if(!base())return false;
     try{
       const data=await fileToDataUrl(file);
-      const item={id:'WS-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),name:file.name,type:guessWorkSampleMimeClient(file.name,file.type),size:file.size,created:Date.now()};
+      const item={id:'WS-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),name:file.name,type:guessDemoMime(file.name,file.type),size:file.size,created:Date.now()};
       const r=await post(api('/api/work-samples'),{siteId:SITE_ID,...item,data});
       return !!r?.ok;
     }catch(e){return false;}

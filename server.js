@@ -17,6 +17,7 @@ const OWNER_TXT_FILE = path.join(DATA_DIR, 'Owner Information.txt');
 const CUSTOMER_TXT_FILE = path.join(DATA_DIR, 'Customer Information.txt');
 const SAMPLE_DIR = path.join(DATA_DIR, 'Work Samples');
 const SAMPLE_META_FILE = path.join(DATA_DIR, 'Work Samples.json');
+const OWNER_TXT_DOWNLOAD_NAME = 'Owner Information.txt';
 fs.mkdirSync(DATA_DIR, {recursive:true});
 fs.mkdirSync(SAMPLE_DIR, {recursive:true});
 
@@ -129,6 +130,9 @@ function writeSeparateTextFiles(all){
   fs.writeFileSync(CUSTOMER_TXT_FILE,customerBlocks.join('\n\n'),'utf8');
 }
 
+// Always keep the owner record as a real UTF-8 .txt file on the backend.
+try{writeSeparateTextFiles(load());}catch(e){}
+
 function mergeState(oldState, incoming, event){
   const old=oldState||{};
   const ev=String(event||'update');
@@ -192,21 +196,17 @@ function persistOrderAndCustomer(siteId,order,customer,state){
   save(all);
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,service:'multiskill-technician-backend'}));
 app.get('/api/owner-information.txt',(req,res)=>{
   try{
-    const siteId=String(req.query.siteId||'');
-    if(!siteId)return res.status(400).type('text/plain').send('Missing siteId');
-    const all=load();
-    const state=all[siteId];
-    if(!state)return res.status(404).type('text/plain').send('Owner information not found');
-    const text=ownerText(siteId,state);
+    // Refresh from the current backend state before serving the plain-text file.
+    writeSeparateTextFiles(load());
     res.set('Content-Type','text/plain; charset=utf-8');
     res.set('Content-Disposition','attachment; filename=\"Owner Information.txt\"');
-    res.send(text);
-  }catch(e){res.status(500).type('text/plain').send(String(e.message||e));}
+    res.sendFile(OWNER_TXT_FILE);
+  }catch(e){res.status(500).send('Owner Information.txt could not be generated.');}
 });
 
+app.get('/api/health',(req,res)=>res.json({ok:true,service:'multiskill-technician-backend'}));
 
 app.post('/api/customer-signup',(req,res)=>{
   try{
@@ -330,17 +330,15 @@ app.get('/api/work-samples',(req,res)=>{
   res.json({ok:true,siteId,workSamples:all[siteId]||[]});
 });
 
-function guessWorkSampleMime(name,type){
-  const t=String(type||'').trim();
-  if(t && t!=='application/octet-stream') return t;
-  const ext=String(name||'').toLowerCase().split('.').pop();
-  const map={
-    mp4:'video/mp4',webm:'video/webm',m4v:'video/x-m4v',mov:'video/quicktime',
-    avi:'video/x-msvideo',mkv:'video/x-matroska',ogv:'video/ogg',ogg:'video/ogg',
-    '3gp':'video/3gpp',mpeg:'video/mpeg',mpg:'video/mpeg',mpe:'video/mpeg',
-    mts:'video/mp2t',m2ts:'video/mp2t',ts:'video/mp2t'
-  };
-  return map[ext]||t||'application/octet-stream';
+function normalizeSampleType(name,type){
+  const n=String(name||'').toLowerCase();
+  const t=String(type||'').toLowerCase();
+  if(n.endsWith('.mp4'))return 'video/mp4';
+  if(n.endsWith('.webm'))return 'video/webm';
+  if(n.endsWith('.mov'))return 'video/quicktime';
+  if(n.endsWith('.m4v'))return 'video/x-m4v';
+  if(n.endsWith('.avi'))return 'video/x-msvideo';
+  return t && t!=='application/octet-stream' ? t : 'application/octet-stream';
 }
 
 app.post('/api/work-samples',async(req,res)=>{
@@ -355,7 +353,7 @@ app.post('/api/work-samples',async(req,res)=>{
     const fileName=safeId+'-'+safeName;
     const filePath=path.join(SAMPLE_DIR,fileName);
     fs.writeFileSync(filePath,Buffer.from(raw,'base64'));
-    const item={id:safeId,name:safeName,type:guessWorkSampleMime(safeName,type),size:Number(size||approx),created:Number(created||Date.now()),fileName};
+    const item={id:safeId,name:safeName,type:normalizeSampleType(safeName,type),size:Number(size||approx),created:Number(created||Date.now()),fileName};
     const bySite=loadSamples();
     bySite[siteId]=mergeWorkSamples(bySite[siteId], [item]);
     saveSamples(bySite);
