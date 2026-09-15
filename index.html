@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="hh-backend-base" content="https://multiskill-technician-backend.onrender.com">
+    <meta name="hh-backend-base" content="https://multiskill-technician-backend.onrender.com">
   <title>Hemant Hardik — Multiskill Technician</title>
   <style>
     /* =========================
@@ -4079,15 +4079,6 @@ body.owner-mode #newCustomersNavItem{display:block!important;}
   window.hhWebsiteInfoStorageNote=function(){return 'Website Information.txt is the durable backup. Browser storage can be deleted by Chrome; the text file is not deleted by clearing browser data. Reconnect the Documents/Website Info folder to continue automatic updates.';};
   window.hhChooseWebsiteInfoFolder=chooseWebsiteInfoFolder;
   window.hhDownloadWebsiteInformation=downloadWebsiteInformation;
-  window.hhDownloadOwnerInformationTxt=async function(){
-    try{
-      if(base()){
-        const r=await fetch(api('/api/owner-information.txt'),{cache:'no-store'});
-        if(r.ok){const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;}
-      }
-    }catch(e){}
-    const blob=new Blob([ownerInformationText()],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);return true;
-  };
   window.hhShareWebsiteInformation=shareWebsiteInformation;
   restoreFolderHandle().then(ok=>{if(ok&&document.body.classList.contains('owner-mode'))autoWriteDeviceFile();});
 
@@ -4684,7 +4675,7 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
     if(!base())return false;
     try{
       const data=await fileToDataUrl(file);
-      const item={id:'WS-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),name:file.name,type:guessDemoMime(file.name,file.type),size:file.size,created:Date.now()};
+      const item={id:'WS-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),name:file.name,type:file.type||'application/octet-stream',size:file.size,created:Date.now()};
       const r=await post(api('/api/work-samples'),{siteId:SITE_ID,...item,data});
       return !!r?.ok;
     }catch(e){return false;}
@@ -5266,6 +5257,10 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
     const confirm=String($('confirmSearchPassword')?.value||'').trim();
     if(next.length<6){window.showWelcomeMessage?.('New password must be at least 6 characters');return;}
     if(next!==confirm){window.showWelcomeMessage?.('New passwords do not match');return;}
+    // Verify the current password against the shared backend first. This keeps
+    // password changes working even when this browser has an older cached value.
+    const verify=await post('/api/owner-password/verify',{siteId:SITE_ID,password:current});
+    if(!verify?.ok){window.showWelcomeMessage?.(verify?.data?.error||'Current owner password is incorrect');return;}
     const r=await post('/api/owner-password',{siteId:SITE_ID,currentPassword:current,newPassword:next});
     if(!r?.ok){window.showWelcomeMessage?.(r?.data?.error||'Password change could not be saved on the backend');return;}
     localStorage.setItem('hh_owner_search_password',next);
@@ -5282,5 +5277,93 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
 })();
 </script>
 
+
+<script id="hh-v14-requested-fixes">
+(function(){
+  'use strict';
+  if(window.__HH_V14_REQUESTED_FIXES__)return;
+  window.__HH_V14_REQUESTED_FIXES__=true;
+  const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
+  const $=id=>document.getElementById(id);
+  const base=()=>{const m=document.querySelector('meta[name="hh-backend-base"]');return String(localStorage.getItem('hh_site_sync_api_url')||localStorage.getItem('hh_owner_email_api_url')||m?.content||window.HH_BACKEND_BASE||'').trim().replace(/\/$/,'');};
+  const api=p=>{const b=base();return b?b+p:p;};
+  async function post(path,payload){if(!base())return null;try{const r=await fetch(api(path),{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify(payload),cache:'no-store'});let data={};try{data=await r.json()}catch(e){}return {ok:r.ok,data};}catch(e){return null;}}
+
+  // Owner Information.txt is always a real UTF-8 plain-text file. This helper
+  // is also available if the owner wants a fresh downloadable copy.
+  window.hhDownloadOwnerInformationTxt=function(){
+    const u=api('/api/owner-information.txt?siteId='+encodeURIComponent(SITE_ID));
+    if(base()){
+      const a=document.createElement('a');a.href=u;a.download='Owner Information.txt';document.body.appendChild(a);a.click();a.remove();
+      return;
+    }
+    const txt=typeof window.hhDownloadWebsiteInformation==='function' ? null : '';
+    if(txt!==null) window.hhDownloadWebsiteInformation?.();
+  };
+
+  // MP4 is a video file even when Android/browser reports an empty MIME type.
+  // Keep the existing input behavior, but make the extension explicit.
+  const demoInput=$('demoFileInput');
+  if(demoInput){
+    const oldAccept=String(demoInput.getAttribute('accept')||'');
+    if(!oldAccept) demoInput.setAttribute('accept','*/*,.mp4,video/mp4');
+    else if(!/\.mp4|video\/mp4/i.test(oldAccept)) demoInput.setAttribute('accept',oldAccept+',.mp4,video/mp4');
+  }
+
+  // Ensure an uploaded MP4 is represented as video/mp4 on every device and
+  // immediately refresh the shared list after the existing upload completes.
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('#saveDemoFilesBtn');
+    if(!b||!document.body.classList.contains('owner-mode'))return;
+    setTimeout(async()=>{
+      try{
+        if(typeof window.hhPullWorkSamples==='function')await window.hhPullWorkSamples();
+        const nav=$('demoNav');
+        if(nav)nav.dispatchEvent(new Event('hhRefreshSharedWorkSamples'));
+      }catch(err){}
+    },1200);
+  },true);
+  document.addEventListener('hhRefreshSharedWorkSamples',()=>{
+    const list=$('demoList');
+    if(list && typeof window.hhPullWorkSamples==='function'){
+      window.hhPullWorkSamples().then(()=>{
+        // The V13 renderer is installed by the existing bundle; reopen the tab
+        // action if available without changing the current navigation.
+        const arr=(()=>{try{return JSON.parse(localStorage.getItem('hh_remote_work_samples_v1')||'[]')}catch(e){return[]}})();
+        if(!arr.length)return;
+        const marker=list.querySelector('[data-hh-remote-samples]');
+        if(marker)marker.remove();
+        if(typeof window.__hhRenderRemoteSamples==='function')window.__hhRenderRemoteSamples();
+      });
+    }
+  });
+
+  // ----- Owner password: verify against the backend when local browser data
+  // is stale. The existing local-password path remains untouched when it is
+  // already correct.
+  const ownerContinue=$('googleOwnerContinueBtn');
+  if(ownerContinue){
+    ownerContinue.addEventListener('click',async e=>{
+      const email=String($('googleAccountEmail')?.value||'').trim().toLowerCase();
+      const password=String($('googleOwnerPassword')?.value||'').trim();
+      const local=localStorage.getItem('hh_owner_search_password')||'multiskilltechnicianHH';
+      if(!base()||password===local)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      if(!/^[^\s@]+@gmail\.com$/i.test(email)){window.showWelcomeMessage?.('Enter a valid Gmail ID first');return;}
+      const r=await post('/api/owner-password/verify',{siteId:SITE_ID,password});
+      if(r?.ok){
+        localStorage.setItem('hh_owner_search_password',password);
+        if(typeof activateOwnerMode==='function')activateOwnerMode();
+        sessionStorage.setItem('hh_session_role','owner');sessionStorage.setItem('hh_session_email',email);
+        $('loginModal')?.classList.remove('active');
+        if(typeof resetLoginFlow==='function')resetLoginFlow();
+        window.showWelcomeMessage?.('Owner password correct — Owner Mode activated');
+      }else window.showWelcomeMessage?.(r?.data?.error||'Wrong owner password');
+    },true);
+  }
+
+
+})();
+</script>
 </body>
 </html>

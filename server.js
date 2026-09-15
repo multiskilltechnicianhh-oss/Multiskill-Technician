@@ -8,8 +8,8 @@ const crypto = require('crypto');
 const app = express();
 app.use(cors());
 // JSON is used for small site-state updates and work-sample uploads.
-// Work samples are limited to 20 MB per file in this version.
-app.use(express.json({limit:'30mb'}));
+// Work samples support MP4/video demos and are limited to 100 MB per file in this version.
+app.use(express.json({limit:'120mb'}));
 
 const DATA_DIR = path.join(__dirname, 'Website Info');
 const DATA_FILE = path.join(DATA_DIR, 'Website Information.json');
@@ -17,7 +17,6 @@ const OWNER_TXT_FILE = path.join(DATA_DIR, 'Owner Information.txt');
 const CUSTOMER_TXT_FILE = path.join(DATA_DIR, 'Customer Information.txt');
 const SAMPLE_DIR = path.join(DATA_DIR, 'Work Samples');
 const SAMPLE_META_FILE = path.join(DATA_DIR, 'Work Samples.json');
-const OWNER_TXT_DOWNLOAD_NAME = 'Owner Information.txt';
 fs.mkdirSync(DATA_DIR, {recursive:true});
 fs.mkdirSync(SAMPLE_DIR, {recursive:true});
 
@@ -130,9 +129,6 @@ function writeSeparateTextFiles(all){
   fs.writeFileSync(CUSTOMER_TXT_FILE,customerBlocks.join('\n\n'),'utf8');
 }
 
-// Always keep the owner record as a real UTF-8 .txt file on the backend.
-try{writeSeparateTextFiles(load());}catch(e){}
-
 function mergeState(oldState, incoming, event){
   const old=oldState||{};
   const ev=String(event||'update');
@@ -196,16 +192,6 @@ function persistOrderAndCustomer(siteId,order,customer,state){
   save(all);
 }
 
-app.get('/api/owner-information.txt',(req,res)=>{
-  try{
-    // Refresh from the current backend state before serving the plain-text file.
-    writeSeparateTextFiles(load());
-    res.set('Content-Type','text/plain; charset=utf-8');
-    res.set('Content-Disposition','attachment; filename=\"Owner Information.txt\"');
-    res.sendFile(OWNER_TXT_FILE);
-  }catch(e){res.status(500).send('Owner Information.txt could not be generated.');}
-});
-
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'multiskill-technician-backend'}));
 
 app.post('/api/customer-signup',(req,res)=>{
@@ -244,6 +230,18 @@ app.post('/api/order-status',(req,res)=>{
     st.websiteInformation=st.websiteInformation||{};st.websiteInformation.customerMode=st.websiteInformation.customerMode||{};st.websiteInformation.customerMode.orders=list;
     all[siteId]=st;save(all);
     res.json({ok:true,state:st,order:list[idx]});
+  }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
+});
+
+app.post('/api/owner-password/verify',(req,res)=>{
+  try{
+    const {siteId,password}=req.body||{};
+    if(!siteId||!password)return res.status(400).json({ok:false,error:'Missing siteId/password'});
+    const all=load();
+    const st=all[siteId]||{};
+    const configured=process.env.OWNER_MODE_PASSWORD||st.ownerPassword||'multiskilltechnicianHH';
+    if(String(password)!==String(configured))return res.status(401).json({ok:false,error:'Incorrect owner password'});
+    res.json({ok:true});
   }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
 });
 
@@ -330,30 +328,20 @@ app.get('/api/work-samples',(req,res)=>{
   res.json({ok:true,siteId,workSamples:all[siteId]||[]});
 });
 
-function normalizeSampleType(name,type){
-  const n=String(name||'').toLowerCase();
-  const t=String(type||'').toLowerCase();
-  if(n.endsWith('.mp4'))return 'video/mp4';
-  if(n.endsWith('.webm'))return 'video/webm';
-  if(n.endsWith('.mov'))return 'video/quicktime';
-  if(n.endsWith('.m4v'))return 'video/x-m4v';
-  if(n.endsWith('.avi'))return 'video/x-msvideo';
-  return t && t!=='application/octet-stream' ? t : 'application/octet-stream';
-}
-
 app.post('/api/work-samples',async(req,res)=>{
   try{
     const {siteId,id,name,type,size,created,data}=req.body||{};
     if(!siteId||!name||!data)return res.status(400).json({ok:false,error:'Missing work-sample fields'});
     const raw=String(data).replace(/^data:[^;]+;base64,/,'');
     const approx=Math.floor(raw.length*0.75);
-    if(approx>20*1024*1024)return res.status(413).json({ok:false,error:'Work sample is larger than 20 MB'});
+    if(approx>100*1024*1024)return res.status(413).json({ok:false,error:'Work sample is larger than 100 MB'});
     const safeId=String(id||crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g,'_');
     const safeName=String(name).replace(/[^a-zA-Z0-9._ -]/g,'_').slice(0,160);
     const fileName=safeId+'-'+safeName;
     const filePath=path.join(SAMPLE_DIR,fileName);
     fs.writeFileSync(filePath,Buffer.from(raw,'base64'));
-    const item={id:safeId,name:safeName,type:normalizeSampleType(safeName,type),size:Number(size||approx),created:Number(created||Date.now()),fileName};
+    const normalizedType=(String(type||'').toLowerCase()==='video/mp4'||/\.mp4$/i.test(safeName))?'video/mp4':String(type||'application/octet-stream');
+    const item={id:safeId,name:safeName,type:normalizedType,size:Number(size||approx),created:Number(created||Date.now()),fileName};
     const bySite=loadSamples();
     bySite[siteId]=mergeWorkSamples(bySite[siteId], [item]);
     saveSamples(bySite);
@@ -410,6 +398,18 @@ app.delete('/api/work-samples/:id', (req,res)=>{
     }
     res.json({ok:true});
   }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
+});
+
+app.get('/api/owner-information.txt',(req,res)=>{
+  try{
+    const siteId=String(req.query.siteId||'');
+    const all=load();
+    const state=siteId?(all[siteId]||{}):Object.values(all)[0]||{};
+    const text=ownerText(siteId||state.siteId||'HH-MULTISKILL-TECHNICIAN-SHARED',state);
+    res.set('Content-Type','text/plain; charset=utf-8');
+    res.set('Content-Disposition','attachment; filename=\"Owner Information.txt\"');
+    res.send(text);
+  }catch(e){res.status(500).type('text/plain').send(String(e.message||e));}
 });
 
 app.use(express.static(__dirname));
