@@ -3585,7 +3585,7 @@ function v7Rows(owner){
   const u=v7Customer();if(!u)return [];
   return all.filter(o=>{
     const same=N(o.customer)===N(u.name)||N(o.customer)===N(u.company)||N(o.customerPhone||o.phone)===N(u.phone)||N(o.customerEmail||o.email)===N(u.email);
-    return same && N(o.status)!=='cancelled';
+    return same;
   });
 }
 function v7Cancel(id){
@@ -3616,6 +3616,7 @@ function v7RenderOrders(owner){
     const phone=o.customerPhone||o.phone||'',email=o.customerEmail||o.email||'',addr=o.customerAddress||o.address||'';
     const canceled=N(o.status)==='cancelled';
     let statusCell=esc(o.status||'pending');
+    if(!owner && canceled){ statusCell='<span class="v7-canceled-label">skill canceled</span>'; }
     if(owner){
       statusCell='<select class="hh-status-select v7-status" data-id="'+esc(o.id)+'"><option '+(N(o.status)==='pending'?'selected':'')+'>pending</option><option '+(N(o.status)==='working'?'selected':'')+'>working</option><option '+(N(o.status)==='completed'?'selected':'')+'>completed</option><option '+(canceled?'selected':'')+'>cancelled</option></select>';
     }
@@ -5133,5 +5134,196 @@ body.owner-mode #hhOwnerMenuNavItem{display:block!important;}
 #ordersSection{margin-bottom:44px;}
 </style>
 
+
+<script id="hh-v13-targeted-fixes">
+(function(){
+  'use strict';
+  const SITE_ID='HH-MULTISKILL-TECHNICIAN-SHARED';
+  const CUSTOMER_KEY='hh_customer_accounts_v4';
+  const SESSION_KEY='hh_customer_session_v4';
+  const ORDERS_KEY='hh_orders_v3';
+  const INFO_KEY='hh_website_information_v9';
+  const $=id=>document.getElementById(id);
+  const safe=(v,f)=>{try{const x=JSON.parse(v);return x??f}catch(e){return f}};
+  const norm=v=>String(v??'').trim().toLowerCase();
+  function backend(){
+    const m=document.querySelector('meta[name="hh-backend-base"]');
+    return String(localStorage.getItem('hh_site_sync_api_url')||localStorage.getItem('hh_owner_email_api_url')||m?.content||window.HH_BACKEND_BASE||'').trim().replace(/\/$/,'');
+  }
+  function api(path){const b=backend();return b?b+path:path;}
+  async function post(path,payload){
+    if(!backend())return null;
+    try{
+      const r=await fetch(api(path),{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify(payload),cache:'no-store'});
+      const text=await r.text();let data={};try{data=JSON.parse(text)}catch(e){}
+      return {ok:r.ok,data};
+    }catch(e){return null;}
+  }
+  function currentCustomer(){return safe(sessionStorage.getItem(SESSION_KEY)||localStorage.getItem(SESSION_KEY),null)}
+  function users(){return safe(localStorage.getItem(CUSTOMER_KEY),[])}
+  function orders(){return safe(localStorage.getItem(ORDERS_KEY),[])}
+  function localInfo(){const x=safe(localStorage.getItem(INFO_KEY),{});x.ownerMode=x.ownerMode||{};x.customerMode=x.customerMode||{};return x;}
+  function owner(){return safe(localStorage.getItem('hh_owner_details_v5'),{})}
+
+  // ---------------------------------------------------------------
+  // 1) Signup is sent to a dedicated backend endpoint immediately.
+  // This guarantees the owner device receives a newly-created customer
+  // even if the normal periodic site-sync happens later.
+  // ---------------------------------------------------------------
+  async function syncNewSignup(){
+    if(document.body.classList.contains('owner-mode'))return;
+    const u=currentCustomer();if(!u)return;
+    const customer={company:u.company||'',name:u.name||'',phone:u.phone||'',email:u.email||'',address:u.address||'',createdAt:u.createdAt||Date.now()};
+    const x=localInfo();
+    x.customerMode.customers=Array.isArray(x.customerMode.customers)?x.customerMode.customers:[];
+    x.customerMode.signupHistory=Array.isArray(x.customerMode.signupHistory)?x.customerMode.signupHistory:[];
+    const exists=x.customerMode.customers.some(c=>norm(c.email)===norm(customer.email)||norm(c.phone)===norm(customer.phone));
+    if(!exists)x.customerMode.customers.push(customer);
+    const sent=await post('/api/customer-signup',{siteId:SITE_ID,customer,state:{siteId:SITE_ID,customers:[customer],websiteInformation:x}});
+    if(sent?.ok){
+      try{localStorage.setItem(INFO_KEY,JSON.stringify(sent.data?.state?.websiteInformation||x));}catch(e){}
+      // Immediately ask the backend for the authoritative owner/customer state.
+      if(typeof window.hhPullSiteState==='function')setTimeout(()=>window.hhPullSiteState(),150);
+    }
+  }
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#v4SignupCreate'))return;
+    setTimeout(syncNewSignup,450);
+  },true);
+
+  // ---------------------------------------------------------------
+  // 2) Order status persistence. The server now preserves the newest
+  // owner-selected status against stale copies sent by another device.
+  // Customer order views must show pending/working/completed/cancelled.
+  // ---------------------------------------------------------------
+  function customerOwn(o,u){
+    if(!u||!o)return false;
+    return (norm(o.customerEmail||o.email)&&norm(o.customerEmail||o.email)===norm(u.email)) ||
+      (norm(o.customerPhone||o.phone)&&norm(o.customerPhone||o.phone)===norm(u.phone)) ||
+      (norm(o.customer)===norm(u.name)) || (norm(o.customer)===norm(u.company));
+  }
+  function showCustomerStatusMessage(order){
+    if(!order)return;
+    const st=norm(order.status);
+    const messages={pending:'Order status: order pending',working:'Order status: order in work',completed:'Order status: order completed',cancelled:'Skill canceled'};
+    if(messages[st]&&typeof window.showWelcomeMessage==='function')window.showWelcomeMessage(messages[st]);
+  }
+  document.addEventListener('change',e=>{
+    const sel=e.target.closest('.v7-status,.v4-status,.hh-status-select');
+    if(!sel||!document.body.classList.contains('owner-mode'))return;
+    setTimeout(async()=>{
+      const a=orders();const o=a.find(x=>String(x.id)===String(sel.dataset.id));if(!o)return;
+      o.status=String(sel.value||'pending').toLowerCase();
+      localStorage.setItem(ORDERS_KEY,JSON.stringify(a));
+      // Explicit status update is authoritative on the backend.
+      await post('/api/site-sync',{siteId:SITE_ID,event:'order_status_updated',state:{siteId:SITE_ID},order:o});
+      if(typeof window.hhPushSiteState==='function')await window.hhPushSiteState('order_status_updated',{order:o});
+      showCustomerStatusMessage(o);
+    },120);
+  },true);
+
+  // Customer cancellation must be synchronized too, and the canceled order
+  // stays visible so the customer can see "skill canceled".
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('.v7-cancel,.v6-cancel,.hh-cancel-skill');
+    if(!b||document.body.classList.contains('owner-mode'))return;
+    setTimeout(async()=>{
+      const o=orders().find(x=>String(x.id)===String(b.dataset.id));
+      if(!o)return;
+      await post('/api/site-sync',{siteId:SITE_ID,event:'order_status_updated',state:{siteId:SITE_ID},order:o});
+      if(typeof window.hhPushSiteState==='function')await window.hhPushSiteState('order_status_updated',{order:o});
+      showCustomerStatusMessage(o);
+    },220);
+  },true);
+
+  // Customer devices receive their own order status/cancel message from the
+  // backend. The shared customer database is never copied onto customer devices.
+  document.addEventListener('hhRemoteStateApplied',e=>{
+    if(document.body.classList.contains('owner-mode'))return;
+    const st=e.detail||{},u=currentCustomer();
+    if(!u||!Array.isArray(st.orders))return;
+    const old=orders();const byId=new Map(old.map(o=>[String(o.id),o]));
+    st.orders.filter(o=>customerOwn(o,u)).forEach(o=>byId.set(String(o.id),{...(byId.get(String(o.id))||{}),...o}));
+    const merged=[...byId.values()];localStorage.setItem(ORDERS_KEY,JSON.stringify(merged));
+    const latest=merged.filter(o=>customerOwn(o,u)).sort((a,b)=>Number(b.updatedAt||b.createdAt||0)-Number(a.updatedAt||a.createdAt||0))[0];
+    if(latest && latest.status==='cancelled')setTimeout(()=>showCustomerStatusMessage(latest),50);
+    if(typeof window.showV7Orders==='function' && $('ordersSection')?.classList.contains('active'))setTimeout(()=>window.showV7Orders(false),50);
+  },true);
+
+  // ---------------------------------------------------------------
+  // 3) Keep the owner New Customer tab durable after a reload.
+  // Remote state is authoritative for the owner device and is written into
+  // the connected Website Information.txt automatically by the existing module.
+  // ---------------------------------------------------------------
+  document.addEventListener('hhRemoteStateApplied',e=>{
+    if(!document.body.classList.contains('owner-mode'))return;
+    const st=e.detail||{};
+    if(Array.isArray(st.customers)){
+      localStorage.setItem(CUSTOMER_KEY,JSON.stringify(st.customers));
+      const x=localInfo();x.customerMode.customers=st.customers;x.updatedAt=new Date().toISOString();
+      localStorage.setItem(INFO_KEY,JSON.stringify(x));
+      try{window.hhSaveWebsiteInformation?.();}catch(err){}
+      setTimeout(()=>window.refreshNewCustomers?.(),30);
+    }
+  },true);
+
+  // ---------------------------------------------------------------
+  // 4) Add Skill image background handling.
+  // Transparent PNG/WebP images are left exactly as they are. For a JPG or
+  // fully-opaque image, a small edge-connected background removal pass makes
+  // a plain/solid background transparent without requiring an external API.
+  // ---------------------------------------------------------------
+  function removeSolidEdgeBackground(dataUrl,done){
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        // If the source already has transparency, preserve it unchanged.
+        const probe=document.createElement('canvas');probe.width=1;probe.height=1;
+        const pctx=probe.getContext('2d');pctx.clearRect(0,0,1,1);
+        pctx.drawImage(img,0,0,1,1);
+        // We cannot infer alpha from a scaled corner alone reliably, so inspect
+        // the four corners at source resolution.
+        const c=document.createElement('canvas');c.width=img.naturalWidth||img.width;c.height=img.naturalHeight||img.height;
+        const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,c.width,c.height);
+        const pix=ctx.getImageData(0,0,c.width,c.height),d=pix.data;
+        let hasAlpha=false;
+        for(let i=3;i<d.length;i+=4){if(d[i]<250){hasAlpha=true;break;}}
+        if(hasAlpha){done(dataUrl);return;}
+        const points=[0,1,c.width-2,c.width-1];
+        let br=0,bg=0,bb=0,count=0;
+        for(const x of points)for(const y of [0,1,c.height-2,c.height-1]){
+          if(x<0||y<0||x>=c.width||y>=c.height)continue;const i=(y*c.width+x)*4;br+=d[i];bg+=d[i+1];bb+=d[i+2];count++;
+        }
+        br/=count;bg/=count;bb/=count;
+        const tol=38;
+        const seen=new Uint8Array(c.width*c.height),q=[];
+        const push=(x,y)=>{if(x<0||y<0||x>=c.width||y>=c.height)return;const n=y*c.width+x;if(seen[n])return;const i=n*4;const dist=Math.hypot(d[i]-br,d[i+1]-bg,d[i+2]-bb);if(dist<=tol){seen[n]=1;q.push(n);}};
+        for(let x=0;x<c.width;x++){push(x,0);push(x,c.height-1)}
+        for(let y=0;y<c.height;y++){push(0,y);push(c.width-1,y)}
+        for(let h=0;h<q.length;h++){
+          const n=q[h],x=n%c.width,y=Math.floor(n/c.width),i=n*4;d[i+3]=0;
+          push(x+1,y);push(x-1,y);push(x,y+1);push(x,y-1);
+        }
+        ctx.putImageData(pix,0,0);done(c.toDataURL('image/png'));
+      }catch(e){done(dataUrl)}
+    };
+    img.onerror=()=>done(dataUrl);img.src=dataUrl;
+  }
+  function installSkillImageProcessing(){
+    const input=$('v4SkillLogoFile');if(!input)return;
+    input.onchange=function(e){
+      const f=e.target.files?.[0];if(!f)return;
+      const r=new FileReader();
+      r.onload=()=>removeSolidEdgeBackground(String(r.result),processed=>{
+        const preview=$('v4SkillLogoPreview');
+        if(preview){preview.innerHTML='<img style="width:82px;height:82px;object-fit:contain;border-radius:18px" src="'+processed.replace(/"/g,'&quot;')+'">';preview.dataset.logo=processed;preview.dataset.backgroundProcessed='true';}
+      });
+      r.readAsDataURL(f);
+    };
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installSkillImageProcessing,{once:true});else installSkillImageProcessing();
+  window.addEventListener('load',installSkillImageProcessing);
+})();
+</script>
 </body>
 </html>
