@@ -13,7 +13,8 @@ app.use(express.json({limit:'30mb'}));
 
 const DATA_DIR = path.join(__dirname, 'Website Info');
 const DATA_FILE = path.join(DATA_DIR, 'Website Information.json');
-const TXT_FILE = path.join(DATA_DIR, 'Website Information.txt');
+const OWNER_TXT_FILE = path.join(DATA_DIR, 'Owner Information.txt');
+const CUSTOMER_TXT_FILE = path.join(DATA_DIR, 'Customer Information.txt');
 const SAMPLE_DIR = path.join(DATA_DIR, 'Work Samples');
 const SAMPLE_META_FILE = path.join(DATA_DIR, 'Work Samples.json');
 fs.mkdirSync(DATA_DIR, {recursive:true});
@@ -41,24 +42,7 @@ function mergeCustomers(oldList,newList){
   return uniqBy([...(Array.isArray(oldList)?oldList:[]),...(Array.isArray(newList)?newList:[])],x=>x.id||String(x.email||'').trim().toLowerCase()+'|'+String(x.phone||'').trim());
 }
 function mergeOrders(oldList,newList){
-  const map=new Map();
-  for(const item of (Array.isArray(oldList)?oldList:[])){
-    const k=String(item?.id||item?.createdAt||crypto.randomUUID());
-    map.set(k,item);
-  }
-  for(const item of (Array.isArray(newList)?newList:[])){
-    const k=String(item?.id||item?.createdAt||crypto.randomUUID());
-    const old=map.get(k);
-    // A stale device may resend an older copy of an order. Never let that
-    // stale copy roll an owner-set status backwards. Explicit status changes
-    // are handled separately by the order_status_updated event.
-    if(old && old.status && item.status && old.status!==item.status){
-      map.set(k,{...old,...item,status:old.status});
-    }else{
-      map.set(k,{...(old||{}),...item});
-    }
-  }
-  return [...map.values()];
+  return uniqBy([...(Array.isArray(oldList)?oldList:[]),...(Array.isArray(newList)?newList:[])],x=>x.id||x.createdAt||crypto.randomUUID());
 }
 function mergeSkills(oldList,newList){
   return uniqBy([...(Array.isArray(oldList)?oldList:[]),...(Array.isArray(newList)?newList:[])],x=>x.id||String(x.name||'').trim().toLowerCase());
@@ -68,129 +52,114 @@ function mergeWorkSamples(oldList,newList){
 }
 function save(x){
   fs.writeFileSync(DATA_FILE, JSON.stringify(x,null,2),'utf8');
-  writeText(x);
+  writeSeparateTextFiles(x);
 }
-function textSafe(value, key=''){
-  // Website Information.txt must never contain image/logo/card/base64 data.
-  const k=String(key||'').toLowerCase();
-  if(['logo','card','image','imageurl','imageurl','src','base64','dataurl','filedata'].some(x=>k===x || k.includes(x))) return undefined;
-  if(typeof value==='string' && /^data:image\//i.test(value)) return undefined;
-  if(Array.isArray(value)) return value.map(v=>textSafe(v,'')).filter(v=>v!==undefined);
-  if(value && typeof value==='object'){
-    const out={};
-    for(const [ck,cv] of Object.entries(value)){
-      const sv=textSafe(cv,ck);
-      if(sv!==undefined) out[ck]=sv;
-    }
-    return out;
-  }
-  return value;
-}
-function recordDateLines(record, fallbackDate){
-  const raw=record?.createdAt||record?.timestamp||record?.changedAt||record?.updatedAt||record?.cancelledAt||record?.date||fallbackDate;
-  const d=new Date(raw);
-  if(Number.isNaN(d.getTime())) return [];
-  return [
-    `Date: ${d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}`,
-    `Month: ${d.toLocaleDateString('en-IN',{month:'long'})}`,
-    `Year: ${d.getFullYear()}`
-  ];
-}
-function textRecords(arr, fallbackDate){
-  if(!Array.isArray(arr)||!arr.length)return ['No records.'];
-  const out=[];
-  arr.forEach((record,i)=>{
-    out.push(`Record ${i+1}`);
-    out.push(...recordDateLines(record,fallbackDate));
-    const clean=textSafe(record);
-    if(clean && typeof clean==='object'){
-      for(const [k,v] of Object.entries(clean)){
-        if(v===undefined)continue;
-        out.push(`${k}: ${Array.isArray(v)?v.join(' & '):v&&typeof v==='object'?JSON.stringify(v):v}`);
-      }
-    }else out.push(String(clean??''));
-    out.push('');
+function cleanTextValue(v){
+  if(v===null||v===undefined)return '';
+  if(typeof v==='string' && /^data:image\//i.test(v.trim()))return '[image omitted]';
+  if(Array.isArray(v))return v.map(cleanTextValue).join(' & ');
+  if(typeof v==='object')return JSON.stringify(v,(k,val)=>{
+    if(['logo','card','image','imageData','base64','data'].includes(String(k)))return undefined;
+    if(typeof val==='string'&&/^data:image\//i.test(val.trim()))return undefined;
+    return val;
   });
-  return out;
+  return String(v);
 }
-function writeText(all){
-  const blocks=[];
+function textBlock(arr){
+  if(!Array.isArray(arr)||!arr.length)return 'No records.';
+  return arr.map((r,i)=>{
+    if(r&&typeof r==='object')return 'Record '+(i+1)+'\n'+Object.entries(r)
+      .filter(([k])=>!['logo','card','image','imageData','base64','data'].includes(k))
+      .map(([k,v])=>k+': '+cleanTextValue(v)).join('\n');
+    return 'Record '+(i+1)+': '+cleanTextValue(r);
+  }).join('\n\n');
+}
+function dateParts(state){
+  const d=new Date(state?.updatedAt||Date.now());
+  return {date:d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}),year:d.getFullYear(),month:d.toLocaleDateString('en-IN',{month:'long'})};
+}
+function ownerText(siteId,state){
+  const p=dateParts(state),o=state.owner||{},wi=state.websiteInformation||{},om=wi.ownerMode||{};
+  const names=Array.isArray(o.names)?o.names.filter(Boolean).join(' & '):(o.names||'');
+  const skills=Array.isArray(state.skills)?state.skills:[];
+  const samples=Array.isArray(state.workSamples)?state.workSamples:[];
+  const history=Array.isArray(om.passwordHistory)?om.passwordHistory:[];
+  return [
+    'HEMANT HARDIK MULTISKILL TECHNICIAN','OWNER INFORMATION','Website ID: '+siteId,
+    'Last Updated: '+p.date,'Year: '+p.year,'Month: '+p.month,'',
+    '============================================================',
+    'Owner Mode Details( '+p.date+' )','============================================================',
+    'Company: '+cleanTextValue(o.company||''),'Owner Name: '+cleanTextValue(names),
+    'Owner Phone Number: '+cleanTextValue(o.phone||''),'Owner Gmail ID: '+cleanTextValue(o.email||''),'',
+    '--- SKILL FRAMES ---',textBlock(skills),'',
+    '--- OWNER DETAILS HISTORY ---',textBlock(om.ownerDetailsHistory||[]),'',
+    '--- CHANGE OWNER HISTORY ---',textBlock(om.changeOwnerHistory||[]),'',
+    '--- OWNER SEARCH PASSWORD HISTORY ---',textBlock(history),'',
+    '--- SHARED WORK SAMPLE LIST ---',textBlock(samples),'',
+    'NOTE: Image/logo/card binary data is intentionally not stored in this text file.',
+    '============================================================'
+  ].join('\n');
+}
+function customerText(siteId,state){
+  const p=dateParts(state),cm=(state.websiteInformation||{}).customerMode||{};
+  const customers=Array.isArray(state.customers)?state.customers:[];
+  const orders=Array.isArray(state.orders)?state.orders:[];
+  const samples=Array.isArray(state.workSamples)?state.workSamples:[];
+  return [
+    'HEMANT HARDIK MULTISKILL TECHNICIAN','CUSTOMER INFORMATION','Website ID: '+siteId,
+    'Last Updated: '+p.date,'Year: '+p.year,'Month: '+p.month,'',
+    '============================================================',
+    'Customer Mode Details( '+p.date+' )','============================================================',
+    '--- CUSTOMER ACCOUNTS ---',textBlock(customers),'',
+    '--- SIGN UP DETAILS ---',textBlock(cm.signupHistory||[]),'',
+    '--- LOGIN DETAILS ---',textBlock(cm.loginHistory||[]),'',
+    '--- ORDERS / ORDER STATUS / CUSTOMER MESSAGES ---',textBlock(orders),'',
+    '--- WORK SAMPLES AVAILABLE TO CUSTOMERS ---',textBlock(samples),'',
+    'NOTE: Image/logo/card binary data is intentionally not stored in this text file.',
+    '============================================================'
+  ].join('\n');
+}
+function writeSeparateTextFiles(all){
+  const ownerBlocks=[],customerBlocks=[];
   for(const [siteId,state] of Object.entries(all||{})){
-    const d=new Date(state.updatedAt||Date.now());
-    const date=d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
-    blocks.push('============================================================');
-    blocks.push(`WEBSITE: ${siteId}`);
-    blocks.push('============================================================');
-    blocks.push(`Last Updated Date: ${date}`);
-    blocks.push(`Last Updated Month: ${d.toLocaleDateString('en-IN',{month:'long'})}`);
-    blocks.push(`Last Updated Year: ${d.getFullYear()}`);
-    blocks.push('');
-    blocks.push(`Owner Mode Details( ${date} )`);
-    blocks.push('------------------------------------------------------------');
-    const owner=textSafe(state.owner||{});
-    if(owner&&typeof owner==='object'){
-      for(const [k,v] of Object.entries(owner)){
-        if(v!==undefined)blocks.push(`${k}: ${Array.isArray(v)?v.join(' & '):v&&typeof v==='object'?JSON.stringify(v):v}`);
-      }
-    }
-    blocks.push('Owner Password: [stored securely on server]');
-    blocks.push('');
-    blocks.push('--- SKILL FRAMES ---');
-    blocks.push(...textRecords(state.skills||[],state.updatedAt));
-    blocks.push('');
-    blocks.push(`Customer Mode Details( ${date} )`);
-    blocks.push('------------------------------------------------------------');
-    blocks.push('--- CUSTOMER ACCOUNTS ---');
-    blocks.push(...textRecords(state.customers||[],state.updatedAt));
-    blocks.push('--- ORDERS ---');
-    blocks.push(...textRecords(state.orders||[],state.updatedAt));
-    blocks.push('--- SIGN UP DETAILS ---');
-    blocks.push(...textRecords(state.websiteInformation?.customerMode?.signupHistory||[],state.updatedAt));
-    blocks.push('');
-    blocks.push('--- WORK SAMPLE RECORDS (NO IMAGE DATA SAVED) ---');
-    for(const item of (Array.isArray(state.workSamples)?state.workSamples:[])){
-      const d2=new Date(item.created||state.updatedAt||Date.now());
-      blocks.push(`Name: ${String(item.name||'')}`);
-      blocks.push(`Date: ${d2.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}`);
-      blocks.push(`Month: ${d2.toLocaleDateString('en-IN',{month:'long'})}`);
-      blocks.push(`Year: ${d2.getFullYear()}`);
-      blocks.push('');
-    }
-    blocks.push('');
+    ownerBlocks.push(ownerText(siteId,state));
+    customerBlocks.push(customerText(siteId,state));
   }
-  fs.writeFileSync(TXT_FILE, blocks.join('\n'),'utf8');
+  fs.writeFileSync(OWNER_TXT_FILE,ownerBlocks.join('\n\n'),'utf8');
+  fs.writeFileSync(CUSTOMER_TXT_FILE,customerBlocks.join('\n\n'),'utf8');
 }
+
 function mergeState(oldState, incoming, event){
   const old=oldState||{};
-  const next={...old,siteId:incoming.siteId,updatedAt:new Date().toISOString()};
   const ev=String(event||'update');
-  // A non-empty legacy skill list is already initialized. An explicit skill
-  // update (including an empty list) is authoritative and must be preserved.
-  const legacySkillsPresent=Array.isArray(old.skills) && old.skills.length>0;
-  const skillsInitialized=old.skillsInitialized===true || legacySkillsPresent;
-  next.skillsInitialized=skillsInitialized;
+  const next={...old,siteId:incoming.siteId,updatedAt:new Date().toISOString()};
+  const legacySkillsPresent=Array.isArray(old.skills)&&old.skills.length>0;
+  next.skillsInitialized=old.skillsInitialized===true||legacySkillsPresent;
 
-  // Owner information is authoritative when it is explicitly changed.
   if(['owner_details_updated','owner_changed','owner_password_changed'].includes(ev)){
-    if(incoming.owner) next.owner=incoming.owner;
-    if(incoming.ownerPassword) next.ownerPassword=incoming.ownerPassword;
+    if(incoming.owner)next.owner=incoming.owner;
+    if(incoming.ownerPassword)next.ownerPassword=incoming.ownerPassword;
   }
-  // Skill updates are authoritative: the owner's current list must be allowed
-  // to remove a skill as well as add one. Using a union here would resurrect
-  // deleted skill frames on the next device pull.
-  if(Array.isArray(incoming.skills) && (ev==='skill_updated' || ev==='skill_bootstrap')){
+  if(Array.isArray(incoming.skills)&&(ev==='skill_updated'||ev==='skill_bootstrap')){
     next.skills=uniqBy(incoming.skills,x=>x.id||String(x.name||'').trim().toLowerCase());
     next.skillsInitialized=true;
-  } else if(Array.isArray(incoming.skills) && ['owner_details_updated','owner_changed','local_update','update'].includes(ev) && !Array.isArray(old.skills)){
-    next.skills=mergeSkills(old.skills,incoming.skills);
-    next.skillsInitialized=next.skills.length>0;
+  }else if(Array.isArray(incoming.skills)&&['owner_details_updated','owner_changed','local_update','update'].includes(ev)&&!Array.isArray(old.skills)){
+    next.skills=mergeSkills([],incoming.skills);next.skillsInitialized=next.skills.length>0;
   }
-  if(Array.isArray(incoming.customers)) next.customers=mergeCustomers(old.customers,incoming.customers);
-  if(Array.isArray(incoming.orders)) next.orders=mergeOrders(old.orders,incoming.orders);
-  if(Array.isArray(incoming.workSamples)) next.workSamples=mergeWorkSamples(old.workSamples,incoming.workSamples);
+
+  if(ev==='order_status_updated' && incoming.order && incoming.order.id){
+    const list=mergeOrders(old.orders,[]);
+    const idx=list.findIndex(x=>String(x.id)===String(incoming.order.id));
+    if(idx>=0)list[idx]={...list[idx],...incoming.order};else list.push(incoming.order);
+    next.orders=list;
+  }else if(Array.isArray(incoming.orders)){
+    next.orders=mergeOrders(old.orders,incoming.orders);
+  }
+  if(Array.isArray(incoming.customers))next.customers=mergeCustomers(old.customers,incoming.customers);
+  if(Array.isArray(incoming.workSamples))next.workSamples=mergeWorkSamples(old.workSamples,incoming.workSamples);
+
   if(incoming.websiteInformation){
-    const oi=old.websiteInformation||{};
-    const ni=incoming.websiteInformation||{};
+    const oi=old.websiteInformation||{},ni=incoming.websiteInformation||{};
     next.websiteInformation={...oi,...ni,updatedAt:new Date().toISOString()};
     next.websiteInformation.ownerMode={...(oi.ownerMode||{}),...(ni.ownerMode||{})};
     next.websiteInformation.customerMode={...(oi.customerMode||{}),...(ni.customerMode||{})};
@@ -201,14 +170,6 @@ function mergeState(oldState, incoming, event){
       const a=[...(Array.isArray(oi.customerMode?.[k])?oi.customerMode[k]:[]),...(Array.isArray(ni.customerMode?.[k])?ni.customerMode[k]:[])];
       next.websiteInformation.customerMode[k]=uniqBy(a,x=>x.timestamp+'|'+(x.email||x.phone||x.name||''));
     }
-  }
-
-  // Keep explicit order status updates from replacing the whole order list.
-  if(ev==='order_status_updated' && incoming.order && incoming.order.id){
-    const list=mergeOrders(old.orders,incoming.orders||[]);
-    const idx=list.findIndex(x=>String(x.id)===String(incoming.order.id));
-    if(idx>=0) list[idx]={...list[idx],...incoming.order}; else list.push(incoming.order);
-    next.orders=list;
   }
   return next;
 }
@@ -233,25 +194,61 @@ function persistOrderAndCustomer(siteId,order,customer,state){
 
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'multiskill-technician-backend'}));
 
-app.post('/api/customer-signup', (req,res)=>{
+app.post('/api/customer-signup',(req,res)=>{
   try{
     const {siteId,customer,state}=req.body||{};
     if(!siteId||!customer)return res.status(400).json({ok:false,error:'Missing siteId/customer'});
     const all=load();
-    const incomingState={...(state||{}),siteId,customers:[customer]};
-    const old=all[siteId]||{};
-    const next=mergeState(old,incomingState,'customer_signup');
-    next.customers=mergeCustomers(old.customers,[customer]);
-    next.websiteInformation=next.websiteInformation||{};
-    next.websiteInformation.customerMode=next.websiteInformation.customerMode||{};
-    next.websiteInformation.customerMode.customers=mergeCustomers(next.websiteInformation.customerMode.customers,next.customers);
-    const snap={...customer,event:'signup',timestamp:new Date(customer.createdAt||Date.now()).toISOString()};
-    const history=[...(Array.isArray(next.websiteInformation.customerMode.signupHistory)?next.websiteInformation.customerMode.signupHistory:[]),snap];
-    next.websiteInformation.customerMode.signupHistory=uniqBy(history,x=>String(x.email||'').trim().toLowerCase()+'|'+String(x.createdAt||x.timestamp||''));
-    next.updatedAt=new Date().toISOString();
-    all[siteId]=next;
-    save(all);
-    res.json({ok:true,saved:true,state:next});
+    const old=all[siteId]||{siteId,customers:[],orders:[],skills:[],workSamples:[]};
+    const incomingState=state||{};
+    const merged=mergeState(old,{...incomingState,siteId,customers:[customer]},'customer_signup');
+    merged.customers=mergeCustomers(old.customers,[customer]);
+    merged.websiteInformation=merged.websiteInformation||{};
+    merged.websiteInformation.customerMode=merged.websiteInformation.customerMode||{};
+    merged.websiteInformation.customerMode.customers=merged.customers;
+    const hist=Array.isArray(merged.websiteInformation.customerMode.signupHistory)?merged.websiteInformation.customerMode.signupHistory:[];
+    merged.websiteInformation.customerMode.signupHistory=uniqBy([...hist,{...customer,event:'signup',timestamp:new Date().toISOString()}],x=>x.timestamp+'|'+(x.email||x.phone||x.name||''));
+    all[siteId]=merged;save(all);
+    res.json({ok:true,state:merged});
+  }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
+});
+
+app.post('/api/order-status',(req,res)=>{
+  try{
+    const {siteId,orderId,status}=req.body||{};
+    const allowed=['pending','working','completed','cancelled'];
+    if(!siteId||!orderId||!allowed.includes(String(status)))return res.status(400).json({ok:false,error:'Invalid siteId/orderId/status'});
+    const all=load(),st=all[siteId];
+    if(!st)return res.status(404).json({ok:false,error:'Website state not found'});
+    const list=Array.isArray(st.orders)?st.orders:[];
+    const idx=list.findIndex(o=>String(o.id)===String(orderId));
+    if(idx<0)return res.status(404).json({ok:false,error:'Order not found'});
+    const now=new Date().toISOString();
+    const msg=String(status)==='cancelled'?'Skill canceled by owner':String(status)==='completed'?'Order completed':String(status)==='working'?'Order is in work':'Order is pending';
+    list[idx]={...list[idx],status:String(status),statusChangedAt:now,statusMessage:msg};
+    st.orders=list;st.updatedAt=now;
+    st.websiteInformation=st.websiteInformation||{};st.websiteInformation.customerMode=st.websiteInformation.customerMode||{};st.websiteInformation.customerMode.orders=list;
+    all[siteId]=st;save(all);
+    res.json({ok:true,state:st,order:list[idx]});
+  }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
+});
+
+app.post('/api/owner-password',(req,res)=>{
+  try{
+    const {siteId,currentPassword,newPassword}=req.body||{};
+    if(!siteId||!currentPassword||!newPassword||String(newPassword).length<6)return res.status(400).json({ok:false,error:'Invalid password fields'});
+    const all=load();const st=all[siteId]||{siteId,customers:[],orders:[],skills:[],workSamples:[]};
+    const configured=process.env.OWNER_MODE_PASSWORD||st.ownerPassword||'multiskilltechnicianHH';
+    if(String(currentPassword)!==String(configured))return res.status(401).json({ok:false,error:'Current password is incorrect'});
+    const now=new Date().toISOString();
+    st.ownerPassword=String(newPassword);
+    st.updatedAt=now;
+    st.websiteInformation=st.websiteInformation||{};st.websiteInformation.ownerMode=st.websiteInformation.ownerMode||{};
+    const hist=Array.isArray(st.websiteInformation.ownerMode.passwordHistory)?st.websiteInformation.ownerMode.passwordHistory:[];
+    hist.push({changedAt:now,action:'Owner Search Password Changed',oldPassword:String(currentPassword),newPassword:String(newPassword)});
+    st.websiteInformation.ownerMode.passwordHistory=hist;
+    all[siteId]=st;save(all);
+    res.json({ok:true,updatedAt:now,password:String(newPassword),state:st});
   }catch(e){res.status(500).json({ok:false,error:String(e.message||e)});}
 });
 
