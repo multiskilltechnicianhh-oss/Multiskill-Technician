@@ -193,6 +193,20 @@ function persistOrderAndCustomer(siteId,order,customer,state){
 }
 
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'multiskill-technician-backend'}));
+app.get('/api/owner-information.txt',(req,res)=>{
+  try{
+    const siteId=String(req.query.siteId||'');
+    if(!siteId)return res.status(400).type('text/plain').send('Missing siteId');
+    const all=load();
+    const state=all[siteId];
+    if(!state)return res.status(404).type('text/plain').send('Owner information not found');
+    const text=ownerText(siteId,state);
+    res.set('Content-Type','text/plain; charset=utf-8');
+    res.set('Content-Disposition','attachment; filename=\"Owner Information.txt\"');
+    res.send(text);
+  }catch(e){res.status(500).type('text/plain').send(String(e.message||e));}
+});
+
 
 app.post('/api/customer-signup',(req,res)=>{
   try{
@@ -316,6 +330,19 @@ app.get('/api/work-samples',(req,res)=>{
   res.json({ok:true,siteId,workSamples:all[siteId]||[]});
 });
 
+function guessWorkSampleMime(name,type){
+  const t=String(type||'').trim();
+  if(t && t!=='application/octet-stream') return t;
+  const ext=String(name||'').toLowerCase().split('.').pop();
+  const map={
+    mp4:'video/mp4',webm:'video/webm',m4v:'video/x-m4v',mov:'video/quicktime',
+    avi:'video/x-msvideo',mkv:'video/x-matroska',ogv:'video/ogg',ogg:'video/ogg',
+    '3gp':'video/3gpp',mpeg:'video/mpeg',mpg:'video/mpeg',mpe:'video/mpeg',
+    mts:'video/mp2t',m2ts:'video/mp2t',ts:'video/mp2t'
+  };
+  return map[ext]||t||'application/octet-stream';
+}
+
 app.post('/api/work-samples',async(req,res)=>{
   try{
     const {siteId,id,name,type,size,created,data}=req.body||{};
@@ -328,7 +355,7 @@ app.post('/api/work-samples',async(req,res)=>{
     const fileName=safeId+'-'+safeName;
     const filePath=path.join(SAMPLE_DIR,fileName);
     fs.writeFileSync(filePath,Buffer.from(raw,'base64'));
-    const item={id:safeId,name:safeName,type:String(type||'application/octet-stream'),size:Number(size||approx),created:Number(created||Date.now()),fileName};
+    const item={id:safeId,name:safeName,type:guessWorkSampleMime(safeName,type),size:Number(size||approx),created:Number(created||Date.now()),fileName};
     const bySite=loadSamples();
     bySite[siteId]=mergeWorkSamples(bySite[siteId], [item]);
     saveSamples(bySite);
