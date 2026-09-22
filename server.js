@@ -415,6 +415,6 @@ app.get('/api/owner-information.txt',(req,res)=>{
 app.use(express.static(__dirname));
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Multiskill website server running on port ${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
